@@ -19,7 +19,7 @@ const store=createStore(combineReducers({keplerGl:reducer}),applyMiddleware(task
 
 function MapContent({geojson,metric,maxValue,onSelect}) {
   const parent=useRef(null); const [size,setSize]=useState({width:800,height:460});
-  const [ready,setReady]=useState(false);
+  const [ready,setReady]=useState(false); const centered=useRef(false);
   const clicked=useSelector(state=>state.keplerGl[MAP_ID]?.visState.clicked);
   const loaded=useSelector(state=>state.keplerGl[MAP_ID]?.visState.datasets[DATA_ID]);
   useEffect(()=>{const code=clicked?.object?.properties?.DIVIPOLA;if(code)onSelect(code);},[clicked,onSelect]);
@@ -30,7 +30,9 @@ function MapContent({geojson,metric,maxValue,onSelect}) {
   const data=useMemo(()=>mapDataset(geojson),[geojson]);
   useEffect(()=>{
     if(!ready || !geojson.features.length)return;
-    const previous=store.getState().keplerGl[MAP_ID]?.mapState;
+    // El mapState inicial de Kepler apunta a San Francisco: solo conservar la vista después de centrar en Colombia.
+    const previous=centered.current?store.getState().keplerGl[MAP_ID]?.mapState:undefined;
+    centered.current=true;
     const config=mapConfig(metric,previous);
     store.dispatch(wrapTo(MAP_ID,addDataToMap({datasets:{info:{id:DATA_ID,label:'Predicciones del mes'},data},options:{centerMap:false,readOnly:true},config})));
   },[ready,data,geojson,metric]);
