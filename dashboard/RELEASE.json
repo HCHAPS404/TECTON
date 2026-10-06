@@ -1,0 +1,37 @@
+{
+  "version": "1.0.0",
+  "generated_at": "2026-10-06T13:14:00.883880+00:00",
+  "qa": {
+    "python_tests": 14,
+    "dashboard_tests": 7,
+    "production_build": "passed",
+    "export_and_bundle_synthetic": "passed",
+    "browser_webgl": "pending_on_pc",
+    "official_data": "not_available",
+    "national_geography": "not_downloaded"
+  },
+  "sources_sha256": {
+    "dashboard/src/KeplerMap.jsx": "db59fd51872975d95f7ebb7dd97ac3f0df4e09a24e2adc7bf51941910aa0dbf8",
+    "dashboard/src/Trend.jsx": "1def39983a994bf77f2760e79022806ac7de4dca8cf5559732b1d2fd8843453b",
+    "dashboard/src/styles.css": "aeef1843c90846effbb4ebf245acdea5c9c906c5c36f1120ba258765d4369513",
+    "dashboard/src/kepler-config.js": "cb4f4f0c839f7408a0d33384deb4ca1215c2b726b0f8b905c40b2134acad7d3b",
+    "dashboard/src/data.js": "8dc2161d8d9a981ea7eae692a528e08a89597e41d22c9cc18997d76cc65ec5f6",
+    "dashboard/src/main.jsx": "abafc49f1011d0db191080407d247ee6497a7cb8ed96b22807f9b87ecfcdb6fa",
+    "dashboard/src/App.jsx": "c88e3cc9fb3d8b4dbe2fd5197bdac88b7a936a2ac5b76698b574f303180a0b2d",
+    "dashboard/package.json": "64a373d6a7ed841daee3528f66ff7485670e3de876a367082d90738d3f7df341",
+    "dashboard/package-lock.json": "05681c72f7d487776bb1d67d18cd2beef4aa6bfe50f7aa87b94f73e50f3afce7",
+    "dashboard/vite.config.js": "2b170e984e673f2bfd14eb01d7a9475eeb1b8eae79b8d33c38537883ece434c4",
+    "dashboard/index.html": "116004fbe5fd4930c17c4157d9d35654da33a947e5f1168053431b75b2339ff7",
+    "dashboard/.npmrc": "ab78fe09e0e67c6206fa272dbc6f4def6390805c20030cdad8bfb7c6ae220925"
+  },
+  "build_sha256": {
+    "dashboard/dist/index.html": "80247baa63bb74378c07514b63eadb9114b9586b4d7ccb45b818026a92091584",
+    "dashboard/dist/assets/index-CVLm7-BX.css": "85bb17eefa87b19d76a0f2c8b9c6cafe7a31af47039fd67730d5638713041921",
+    "dashboard/dist/assets/KeplerMap-CmgNbL1E.css": "5717e81a2c6082f8688c7027807b565c0973dfb137303f8e64f62ccfafb4905a",
+    "dashboard/dist/assets/KeplerMap-C6F1v6gh.js": "7280b6def80ecccfeb99a62c5257b99fb6028e2a270e81fc51d4b8413ec2bc79",
+    "dashboard/dist/assets/mapbox-gl-arci1MyL.js": "500edb81966b45110ce6f313af8382f0b872ef00e3dde3fb309dfcb2249026ee",
+    "dashboard/dist/assets/parquet_wasm_bg-DrNke8Bl.wasm": "1e2ff2657d0c6b776eee88fe67392fdab59fea95821089bc60883e948f652eaf",
+    "dashboard/dist/assets/maplibre-gl-CTKMVEiI.js": "b07a48e72e3ff62fb51852e29828dfffe082ffcc75aee730b51b0c66f15b3374",
+    "dashboard/dist/assets/index-BPPLhZvH.js": "120f18e2883e3464dd78869f77ca729ccd01959a0746cb4ce58ff8fe293dd748"
+  }
+}

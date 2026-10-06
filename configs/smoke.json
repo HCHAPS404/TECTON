@@ -1,0 +1,14 @@
+{
+  "name": "smoke-synthetic",
+  "data_dir": "data/synthetic",
+  "strict": false,
+  "seed": 42,
+  "threads": 2,
+  "model": {"family": "hist", "iterations": 15, "learning_rate": 0.1, "depth": 3},
+  "features": {"use_history": true, "smoothing": 20.0},
+  "stress_test": false,
+  "folds": [
+    {"train_end": "2021-09-01", "valid_start": "2021-10-01", "valid_end": "2022-03-01"},
+    {"train_end": "2022-03-01", "valid_start": "2022-04-01", "valid_end": "2022-09-01"}
+  ]
+}

@@ -1,0 +1,226 @@
+import hashlib
+import importlib.metadata
+import json
+import platform
+import re
+import subprocess
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+import joblib
+import numpy as np
+import pandas as pd
+from threadpoolctl import threadpool_limits
+
+from tecton.features import Features
+from tecton.metrics import score
+from tecton.models import Models
+from tecton.schema import KEYS, OUTPUT, load_inputs, sha256, validate_predictions
+
+METRIC_PROTOCOL = {"version": 1, "risk": "AUC-ROC", "magnitude": "RMSE-log1p-all-rows", "interval": "Winkler-log1p-alpha0.2"}
+
+
+def dump_json(path, payload):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_text(json.dumps(payload, indent=2, ensure_ascii=False, allow_nan=False), encoding="utf-8")
+    temporary.replace(path)
+
+
+def fold_indices(train, folds):
+    seen = set()
+    result = []
+    for fold in folds:
+        cutoff, start, end = (pd.Timestamp(fold[c]) for c in ["train_end", "valid_start", "valid_end"])
+        if not cutoff < start <= end:
+            raise ValueError("Fold temporal inválido.")
+        tr = train["fecha"] <= cutoff
+        va = train["fecha"].between(start, end)
+        if not tr.any() or not va.any():
+            raise ValueError("Fold vacío; revisar los períodos.")
+        months = set(train.loc[va, "fecha"])
+        if seen & months:
+            raise ValueError("Los folds primarios no deben solapar meses de validación.")
+        seen |= months
+        if set(train.loc[tr, "fecha"]) & months:
+            raise ValueError("Un mes está simultáneamente en entrenamiento y validación.")
+        result.append((tr, va))
+    if not result:
+        raise ValueError("Se requiere al menos un fold.")
+    return result
+
+
+def fit_predict(train, test, config):
+    feature_model = Features(**config["features"])
+    x_train = feature_model.fit_transform(train)
+    x_test = feature_model.transform(test)
+    y = train["tiene_evento"].to_numpy(int)
+    z = np.log1p(train["personas_desplazadas"].to_numpy(float))
+    model = Models(config).fit(x_train, y, z)
+    return model.predict(x_test), feature_model, model, list(x_train.columns)
+
+
+def run(root: Path, config_path: Path):
+    root, config_path = Path(root).resolve(), Path(config_path).resolve()
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    # Caminos siempre relativos al proyecto, iguales en local y Colab.
+    data_dir = root / config["data_dir"]
+    frames, audit, hashes, synthetic = load_inputs(data_dir, config["strict"])
+    train = frames[0]
+    tests = pd.concat(frames[1:], ignore_index=True)
+    split_indices = fold_indices(train, config["folds"])
+    slug = re.sub(r"[^a-zA-Z0-9_-]", "-", config["name"])
+    run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ") + "-" + slug
+    out = root / "runs" / run_id
+    out.mkdir(parents=True, exist_ok=False)
+    started = time.perf_counter()
+    protocol = {**METRIC_PROTOCOL, "folds": config["folds"], "stress_test": config.get("stress_test", False)}
+    versions = {p: importlib.metadata.version(p) for p in ["numpy", "pandas", "scikit-learn", "joblib"]}
+    try:
+        versions["catboost"] = importlib.metadata.version("catboost")
+    except importlib.metadata.PackageNotFoundError:
+        pass
+    git = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True)
+    manifest = {
+        "run_id": run_id, "status": "running", "synthetic": synthetic,
+        "config": config, "data_hashes": hashes, "protocol": protocol,
+        "protocol_hash": hashlib.sha256(json.dumps(protocol, sort_keys=True).encode()).hexdigest(),
+        "python": platform.python_version(), "platform": platform.platform(), "packages": versions,
+        "git_commit": git.stdout.strip() if git.returncode == 0 else None,
+        "started_utc": datetime.now(timezone.utc).isoformat(),
+    }
+    dump_json(out / "manifest.json", manifest)
+    dump_json(out / "audit.json", audit)
+    dump_json(out / "config.json", config)
+    # Capturar el código ANTES de entrenar; el bundle reproduce esta versión.
+    from tecton.artifacts import snapshot
+
+    snapshot(root, out / "source.zip")
+    manifest["source_sha256"] = sha256(out / "source.zip")
+    dump_json(out / "manifest.json", manifest)
+    folds, oof = [], []
+    try:
+        with threadpool_limits(limits=config["threads"]):
+            for i, (tr_mask, va_mask) in enumerate(split_indices, 1):
+                training, validation = train.loc[tr_mask].copy(), train.loc[va_mask].copy()
+                predictions, _, _, features = fit_predict(training, validation, config)
+                metrics = score(validation["tiene_evento"], validation["personas_desplazadas"], predictions)
+                folds.append({"fold": i, "validation_rows": len(validation), **metrics})
+                part = validation[KEYS + ["tiene_evento", "personas_desplazadas"]].copy()
+                part["fold"] = i
+                for name, vector in zip(["prob", "point_log", "q10_log", "q90_log"], predictions, strict=True):
+                    part[name] = vector
+                oof.append(part)
+                dump_json(out / "progress.json", {"finished_folds": folds})
+                print(f"{run_id} fold {i}/{len(split_indices)}: AUC={metrics['auc']:.4f} RMSE-log={metrics['rmse_log']:.4f}", flush=True)
+            summary = {f"{metric}_mean": float(np.mean([f[metric] for f in folds])) for metric in ["auc", "rmse_log", "winkler_log", "coverage_80"]}
+            summary["auc_std"] = float(np.std([f["auc"] for f in folds]))
+            report = {"summary": summary, "folds": folds}
+            if config.get("stress_test", False):
+                tr = train["fecha"] <= "2021-09-01"
+                va = train["fecha"].between("2021-10-01", "2022-09-01")
+                pred, _, _, _ = fit_predict(train.loc[tr], train.loc[va], config)
+                report["stress_12_months"] = score(train.loc[va, "tiene_evento"], train.loc[va, "personas_desplazadas"], pred)
+            dump_json(out / "metrics.json", report)
+            pd.concat(oof, ignore_index=True).to_csv(out / "oof.csv", index=False, date_format="%Y-%m-%d")
+            pred, feature_model, models, features = fit_predict(train, tests, config)
+            submission = tests[KEYS].copy()
+            submission["fecha"] = submission["fecha"].dt.strftime("%Y-%m-%d")
+            submission[OUTPUT[2]] = pred[0]
+            for name, vector in zip(OUTPUT[3:], pred[1:], strict=True):
+                submission[name] = np.expm1(vector)
+            validate_predictions(submission, tests[KEYS])
+            submission.to_csv(out / "predicciones.csv", index=False)
+            # Releer el CSV exportado verifica formato/precisión tras serializarlo.
+            saved = pd.read_csv(out / "predicciones.csv", dtype={"DIVIPOLA": "string"})
+            validate_predictions(saved, tests[KEYS])
+            joblib.dump({"features": feature_model, "models": models}, out / "model.joblib")
+        from tecton.artifacts import feature_registry, html_dashboard
+
+        feature_registry(features).to_csv(out / "replicabilidad.csv", index=False)
+        html_dashboard(submission, report, out / "dashboard.html", synthetic)
+        artifact_names = ["source.zip", "metrics.json", "predicciones.csv", "model.joblib", "replicabilidad.csv", "dashboard.html"]
+        manifest.update({"status": "complete", "qa_passed": True, "feature_names": features, "elapsed_seconds": time.perf_counter() - started, "artifact_hashes": {name: sha256(out / name) for name in artifact_names}})
+        dump_json(out / "manifest.json", manifest)
+        print(json.dumps({"run_id": run_id, "synthetic": synthetic, "summary": summary}, ensure_ascii=False), flush=True)
+        return run_id
+    except BaseException as error:
+        manifest.update({"status": "failed", "error_type": type(error).__name__, "elapsed_seconds": time.perf_counter() - started})
+        dump_json(out / "manifest.json", manifest)
+        raise
+
+
+def promotion_reasons(candidate, candidate_manifest, current=None, current_manifest=None):
+    reasons = []
+    if candidate_manifest.get("status") != "complete" or not candidate_manifest.get("qa_passed"):
+        reasons.append("Experimento incompleto o sin QA aprobado.")
+    if current is None:
+        return reasons
+    if candidate_manifest["data_hashes"] != current_manifest["data_hashes"]:
+        reasons.append("Los datos cambian: no son experimentos comparables.")
+    if candidate_manifest["protocol_hash"] != current_manifest["protocol_hash"]:
+        reasons.append("Cambió el protocolo de validación.")
+    c, old = candidate["summary"], current["summary"]
+    if c["auc_mean"] < old["auc_mean"] + 0.002:
+        reasons.append("AUC medio no mejora al menos 0.002.")
+    improvements = sum(new["auc"] > prev["auc"] for new, prev in zip(candidate["folds"], current["folds"], strict=True))
+    if improvements < np.ceil(len(candidate["folds"]) * 0.6):
+        reasons.append("No mejora en al menos 60% de los folds.")
+    if candidate["folds"][-1]["auc"] < current["folds"][-1]["auc"] - 0.005:
+        reasons.append("El último fold pierde más de 0.005 AUC.")
+    if c["rmse_log_mean"] > old["rmse_log_mean"] * 1.03:
+        reasons.append("RMSE-log empeora más de 3%.")
+    if c["winkler_log_mean"] > old["winkler_log_mean"] * 1.10:
+        reasons.append("Winkler empeora más de 10%.")
+    if "stress_12_months" in candidate and "stress_12_months" in current:
+        if candidate["stress_12_months"]["auc"] < current["stress_12_months"]["auc"] - 0.005:
+            reasons.append("La prueba de 12 meses pierde más de 0.005 AUC.")
+    return reasons
+
+
+def promote(root: Path, run_id: str, reason: str, demo=False):
+    out = resolve_run(root, run_id)
+    manifest = json.loads((out / "manifest.json").read_text())
+    metrics = json.loads((out / "metrics.json").read_text())
+    verify_run_artifacts(out, manifest)
+    if manifest["synthetic"] != demo:
+        raise ValueError("Usar --demo solo para ensayos sintéticos; nunca promoverlos a producción.")
+    if not demo and (len(metrics["folds"]) != 5 or not manifest["config"]["strict"] or "stress_12_months" not in metrics):
+        raise ValueError("Champion real requiere cinco folds, auditoría estricta y prueba de 12 meses.")
+    if (root / "state" / "FROZEN.json").exists() and not demo:
+        raise ValueError("Entrega congelada. Los nuevos experimentos no reemplazan el champion.")
+    pointer = root / "state" / ("champion-demo.json" if demo else "champion.json")
+    old_metrics = old_manifest = None
+    if pointer.exists():
+        old_id = json.loads(pointer.read_text())["run_id"]
+        old_dir = resolve_run(root, old_id)
+        old_metrics = json.loads((old_dir / "metrics.json").read_text())
+        old_manifest = json.loads((old_dir / "manifest.json").read_text())
+    reasons = promotion_reasons(metrics, manifest, old_metrics, old_manifest)
+    if reasons:
+        raise ValueError("No promover: " + " ".join(reasons))
+    payload = {"run_id": run_id, "reason": reason, "promoted_utc": datetime.now(timezone.utc).isoformat(), "metrics": metrics["summary"]}
+    dump_json(pointer, payload)
+    with (root / "state" / "promotion_history.jsonl").open("a", encoding="utf-8") as stream:
+        stream.write(json.dumps({**payload, "demo": demo}, ensure_ascii=False) + "\n")
+    return payload
+
+
+def resolve_run(root: Path, run_id: str):
+    if not re.fullmatch(r"[a-zA-Z0-9_-]+", run_id):
+        raise ValueError("run_id inválido.")
+    out = root / "runs" / run_id
+    if not out.is_dir():
+        raise ValueError(f"Experimento no existe: {run_id}.")
+    return out
+
+
+def verify_run_artifacts(out: Path, manifest):
+    hashes = manifest.get("artifact_hashes", {})
+    if not {"predicciones.csv", "metrics.json", "source.zip"} <= set(hashes):
+        raise ValueError("El run no tiene manifiesto completo de integridad.")
+    for name, expected in hashes.items():
+        if sha256(out / name) != expected:
+            raise ValueError(f"Artefacto cambió después de entrenar: {name}.")

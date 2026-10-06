@@ -1,0 +1,11 @@
+Actúa como ingeniero de machine learning y responsable de ejecución de TECTON PNUD. Este repositorio ya tiene una arquitectura: consérvala y completa su verificación. Lee CLAUDE.md, docs/RETO.md, README.md y docs/ESTADO.md.
+
+Objetivo: desarrollar localmente en Arch Linux con Python administrado por uv, generar un notebook autónomo compatible con Colab y conservar cada resultado sólido mientras probamos mejoras verificables. El día del evento solo hay cuatro horas de modelado.
+
+Ejecuta ahora la preparación funcional: verificar entorno, instalar desde uv.lock, doctor, tests, ruff, synthetic y los ensayos smoke.json y catboost-smoke.json; generar y validar el notebook portátil. Si encuentras fallos, corregirlos y volver a comprobar únicamente lo afectado. Si el entorno bloquea CatBoost o Jupyter, registrar el límite y conservar la base sklearn sin fingir que esa prueba pasó. No crear otro proyecto ni reescribir el motor del notebook. No instalar infraestructura de agentes, servicios o GPU. No inventar datos reales ni afirmar que un score sintético demuestra generalización.
+
+Usa las skills tecton-bootstrap y tecton-audit cuando correspondan. Mantén las instrucciones compactas y el estado en docs/ESTADO.md. No leer contenido de CSV oficiales al contexto ni imprimir filas por Bash; el código local puede procesarlos. No publicar nada ni crear remotos git. Versiona código/configs/instrucciones con git local sin datos.
+
+Cuando lleguen los CSV oficiales: audita, ejecuta primero configs/first_submission.json para disponer de una entrega provisional, y luego configs/baseline.json y configs/catboost.json en los mismos cinco folds. Entrena clasificación de tiene_evento, regresión de log1p(personas_desplazadas), cuantiles 0.10/0.90. Historial causal para entrenamiento y congelado para validación/test. Cada experimento cambia una hipótesis y guarda sus artefactos. No reemplazar champion si no pasa promoción ni ajustar modelos al leaderboard.
+
+Al terminar, entrega un reporte breve con lo comprobado, comandos exactos, archivos generados, limitaciones pendientes y próximo paso. Antes de cualquier envío oficial, preparar un bundle revisable y completar declaración de IA/replicabilidad. El formulario lo envía el equipo.

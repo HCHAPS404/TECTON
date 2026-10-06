@@ -1,0 +1,3 @@
+Ya existe un resultado sólido en state/champion.json. Ejecuta una sola mejora bajo el mismo protocolo temporal y los mismos datos. Empieza por la hipótesis de mayor valor que aún no se haya probado en docs/ESTADO.md. Copia la configuración a un nuevo archivo; conserva la semilla y folds. Si cambias código de features o export, comprueba nuevamente sus invariantes.
+
+Compara AUC por fold, media, último fold y stress de 12 meses, además de RMSE/Winkler log. No reentrenes ni sobrescribas el run del champion. Documenta el nuevo run aunque falle. Solo recomendar promoción si pasa los umbrales; una vez congelado el champion, dejar todo experimento nuevo separado.

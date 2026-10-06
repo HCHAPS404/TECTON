@@ -1,0 +1,11 @@
+{
+  "name": "first-provisional",
+  "data_dir": "data/raw",
+  "strict": true,
+  "seed": 42,
+  "threads": 4,
+  "model": {"family": "hist", "iterations": 60, "learning_rate": 0.08, "depth": 5},
+  "features": {"use_history": true, "smoothing": 20.0},
+  "stress_test": false,
+  "folds": [{"train_end": "2021-09-01", "valid_start": "2021-10-01", "valid_end": "2022-09-01"}]
+}

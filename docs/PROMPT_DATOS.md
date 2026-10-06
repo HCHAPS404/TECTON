@@ -1,0 +1,3 @@
+Llegaron los tres CSV oficiales y ya están en data/raw. Sigue CLAUDE.md y ejecuta la auditoría local sin llevar filas o targets reales a tu contexto. Revisa los T&C/diccionario oficial que proporcione el equipo y registra cambios de contrato.
+
+Primero ejecuta configs/first_submission.json para generar una entrega provisional válida. Después ejecuta configs/baseline.json; verifica los cinco folds, stress y QA. Conserva el run_id y propone su promoción inicial. Ejecuta configs/catboost.json bajo el mismo protocolo y compáralo; no reemplaces el champion sin una promoción explícita que pase el harness. Detén mejoras que comprometan el cierre de las 14:00 Bogotá. Reporta métricas agregadas, duración y rutas de artefactos sin filas reales.
