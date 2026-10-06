@@ -37,7 +37,7 @@ class ColabFlowTests(unittest.TestCase):
             snapshot(ROOT, source)
             with zipfile.ZipFile(source) as archive:
                 self.assertIn("docs/fuentes_datos.csv", archive.namelist())
-                self.assertFalse(any(n.startswith("data/") for n in archive.namelist()))
+                self.assertFalse(any(n.startswith("data/") and not n.startswith("data/external/") for n in archive.namelist()))
             portable_notebook(source, CONFIG, target)
             notebook = json.loads(target.read_text())
             code = ["".join(c["source"]) for c in notebook["cells"] if c["cell_type"] == "code"]

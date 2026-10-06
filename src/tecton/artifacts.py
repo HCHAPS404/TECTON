@@ -23,6 +23,8 @@ def snapshot(root: Path, target: Path):
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
         paths = list((root / "src").rglob("*.py")) + list((root / "configs").glob("*.json"))
         paths += [root / name for name in ["pyproject.toml", "uv.lock", "requirements-colab.txt", *DECLARATIONS]]
+        # Fuentes externas públicas ya agregadas (no datos del reto) para que Colab reproduzca el modelo.
+        paths += list((root / "data" / "external").glob("*.csv")) + list((root / "data" / "external").glob("*.meta.json"))
         for path in sorted(paths):
             if path.is_file() and "__pycache__" not in path.parts:
                 archive.write(path, path.relative_to(root))

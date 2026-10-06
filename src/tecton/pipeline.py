@@ -160,6 +160,23 @@ def run(root: Path, config_path: Path):
     snapshot(root, out / "source.zip")
     manifest["source_sha256"] = sha256(out / "source.zip")
     dump_json(out / "manifest.json", manifest)
+    # Tablas externas declaradas: se cargan una vez, se registran con hash y viajan con el modelo.
+    external_files = config["features"].get("external_files", [])
+    if external_files:
+        tables = {}
+        for relative in external_files:
+            path = root / relative
+            table = pd.read_csv(path, dtype={"DIVIPOLA": "string"})
+            if not table["DIVIPOLA"].str.fullmatch(r"\d{5}").all() or table.duplicated([k for k in ["DIVIPOLA", "mes"] if k in table]).any():
+                raise ValueError(f"{relative}: DIVIPOLA inválido o llaves duplicadas.")
+            missing = set(train["DIVIPOLA"]) - set(table["DIVIPOLA"])
+            if missing:
+                raise ValueError(f"{relative}: faltan {len(missing)} municipios del reto.")
+            tables[Path(relative).stem] = table
+        manifest["external_hashes"] = {relative: sha256(root / relative) for relative in external_files}
+        dump_json(out / "manifest.json", manifest)
+        features = {k: v for k, v in config["features"].items() if k != "external_files"}
+        config = {**config, "features": {**features, "external_tables": tables}}
     folds, oof = [], []
     try:
         with threadpool_limits(limits=config["threads"]):

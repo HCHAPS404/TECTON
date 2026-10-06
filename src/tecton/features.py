@@ -20,7 +20,10 @@ class Features:
         "dept_enso": (["departamento", "fase_key"], "months", "dept"),
     }
 
-    def __init__(self, use_history=True, smoothing=20.0, event_types=False, extra_history=(), drop=()):
+    def __init__(self, use_history=True, smoothing=20.0, event_types=False, extra_history=(), drop=(),
+                 external_tables=None):
+        # Tablas externas ya cargadas por el pipeline: {nombre: DataFrame con DIVIPOLA [y mes]}.
+        self.external_tables = external_tables or {}
         self.drop = list(drop)
         self.extra_history = list(extra_history)
         unknown = set(self.extra_history) - set(self.CONTEXTS)
@@ -61,6 +64,13 @@ class Features:
         x["departamento"] = x["DIVIPOLA"].str[:2]
         x["mes_cat"] = month.astype(str)
         x["fase_enso"] = frame["fase_enso"].fillna("Desconocida").astype(str).to_numpy()
+        for name, table in self.external_tables.items():
+            keys = [k for k in ["DIVIPOLA", "mes"] if k in table.columns]
+            left = pd.DataFrame({"DIVIPOLA": x["DIVIPOLA"].to_numpy(), "mes": month})
+            values = [c for c in table.columns if c not in keys and pd.api.types.is_numeric_dtype(table[c])]
+            joined = left[keys].merge(table[keys + values], on=keys, how="left", validate="many_to_one")
+            for col in values:
+                x[f"ext_{name}_{col}"] = joined[col].to_numpy(float)
         # Excluir covariables por nombre exacto o prefijo (p. ej. "log_ingresos").
         return x.drop(columns=[c for c in x.columns if any(c == d or c.startswith(d + "_") or c == "log_" + d for d in self.drop)])
 

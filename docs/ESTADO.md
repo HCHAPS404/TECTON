@@ -61,3 +61,12 @@ Diagnóstico: AUC 0.738 a 1-12 meses del corte y 0.687 a 13-24 meses (la prueba 
 | SMOTE / pesos de clase | no aplica: AUC es de ranking | no se aplica |
 
 Nueva métrica en runs: stress_far_13_24 (entrena hasta 2020-09, valida 2021-10 a 2022-09). Siguiente: datos externos colombianos desde 2018 (climatología IDEAM), como experimento separado.
+
+## Skills de estadística aplicadas, 6 oct 11:30
+
+- Nuevas skills: `tecton-estadistica` (bootstrap pareado por meses, criterios de decisión, deriva, disciplina experimental) y `tecton-datos-externos` (admisibilidad y protocolo). Scripts: `scripts/stat_compare.py`, `scripts/drift_check.py`.
+- bagging vs baseline-calibrado: ΔAUC +0.0002 [−0.0025, +0.0029]; ΔWinkler −0.037 (P=1.00); Δpuntos +0.07 (P=0.67). Empate en riesgo.
+- bagging+regularizado vs baseline-calibrado: ΔAUC +0.0018 (P=0.92); Δpuntos +0.14 (P=0.87); stress lejano 19.56 vs 19.90. Harness rechaza (+0.2 requerido).
+- Deriva: covariables municipales estables (PSI < 0.1); ONI PSI 1.33. ENSO: entrenamiento 28% Niño/42% Niña; pública 58% Niño; privada 85% Neutral, 0% Niño. La nota oficial dependerá de estacionalidad y perfil municipal más que de ENSO.
+- Champion: 20261006T154005442685Z-baseline-calibrado (run de Colab enviado). Envío registrado con hora aproximada 10:50, pendiente de confirmar.
+- En curso: climatología municipal de lluvia IDEAM 2018-01 a 2022-09 (fuente externa colombiana); integración `features.external_files` lista.
