@@ -115,3 +115,19 @@ Runs completos:
 - AUC por fold (econ − champion): +0.0045, +0.0053, +0.0003, −0.0007, +0.0043. Pendiente: bootstrap pareado (`scripts/stat_compare.py`) y promoción por harness; corre ~2x más lento (≈4 min por fold en la PC).
 - EQTransformer no se implementó: es una red neuronal de detección sísmica sobre formas de onda (regla 8 prohíbe modelos neuronales y no aplica a un panel municipio-mes). Sustituto admisible si se quiere la señal: catálogo sísmico del SGC 2018-01 a 2022-09 como rezago municipal.
 - Reestimado con CatBoost (DIVIPOLA categórica, 300 iteraciones). Run `20261006T160711740047Z-econ-panel-boost`. AUC medio 0.701, RMSE-log 1.276, Winkler 3.555, cobertura 0.720, puntos_75 21.6. Estrés 12 meses: AUC 0.738, RMSE-log 1.249. El corte 2021-10 a 2022-03 llegó a AUC 0.782 y RMSE-log 1.091. El corte más reciente, 2022-04 a 2022-09, quedó en AUC 0.687. No promovido.
+
+## Cierre, 6 oct 14:42
+
+Envíos en tabla pública (puntos / AUC / RMSE / Winkler):
+- baseline-calibrado 26.2 / 0.748 / 1.177 / 2.90
+- bagging 26.6 / 0.751 / 1.176 / 2.86
+- lgbm-espacial-ideam 27.6 / 0.757 / 1.171 / 2.66
+- lgbm-ideam-perfil 27.7 / 0.757 / 1.171 / 2.65
+- lgbm-perfil-exposicion 27.8 / 0.758 / 1.170 / 2.65
+- final-censo-econ 28.4 / 0.763 / 1.168 / 2.63
+- **final-dnp (entrega final)** AUC 0.764
+
+Entrega final: 20261006T184216080776Z-final-dnp (LightGBM x3 semillas + vecindad espacial + IDEAM climatología y perfil + Censo DANE 2018 + capacidades DNP + bloque econométrico de Laura + calibración). vs final-censo-econ: ΔAUC +0.0007 (P=0.98), Δpuntos +0.08 (P=0.99); el harness no lo promueve (umbral +0.2), se envió por evidencia estadística consistente. Champion del harness: final-censo-econ.
+Validación: 5 folds puntos 25.17, AUC 0.7311; stress 12 m AUC 0.7468; lejano 13-24 m AUC 0.7028 / 21.84 (primer envío: 19.90).
+Descartados al cierre: historial UNGRD 2014-2015 (evaluación +0.0004 dentro del ruido; run corto peor en fold 2022-04/09: 0.7068 vs 0.7112), Optuna sobre variables finales (sin mejora en 2 pruebas, detenido por tiempo).
+Bundle: delivery/20261006T184216080776Z-final-dnp (CSV, notebook desde snapshot, replicabilidad 97 variables, fuentes, declaración de IA, geovisor). Notebook del equipo con enlace: colab/tecton_colab_equipo_FINAL.ipynb (no versionado).
