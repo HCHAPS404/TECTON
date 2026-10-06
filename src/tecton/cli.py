@@ -128,7 +128,7 @@ def main():
             announced = datetime.fromisoformat("2026-10-06T15:00:00-05:00")
             path = root / "state/submissions.jsonl"
             submitted = [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
-            earliest = max(datetime.fromisoformat(row["received_at"]) for row in submitted) + timedelta(minutes=30) if submitted else now
+            earliest = max(datetime.fromisoformat(row["received_at"]) for row in submitted) + timedelta(minutes=5) if submitted else now
             print(json.dumps({"now_bogota": now.isoformat(), "deadline_seguro": deadline.isoformat(), "cierre_diapositiva": announced.isoformat(), "earliest_next_submission": earliest.isoformat(), "minutes_to_deadline": round((deadline - now).total_seconds() / 60, 1)}, indent=2))
     except (ValueError, FileNotFoundError, HTTPError, URLError) as error:
         parser.exit(2, f"Error: {error}\n")

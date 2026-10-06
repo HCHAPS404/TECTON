@@ -9,7 +9,7 @@ Fuente: guía PNUD adjunta a esta conversación, pp. 1–8. Resumen verificado e
 - CSV único: 42978 filas, DIVIPOLA, fecha, prob_evento, personas_desplazadas_estimadas, personas_desplazadas_q10, personas_desplazadas_q90.
 - AUC 50%; RMSE log1p sobre todas las filas 20%; Winkler log1p alfa0.2 5%; replicabilidad 5%; panel de finalistas 20%.
 - Leaderboard público y clasificación oculta usan períodos distintos. No seleccionar por una subida aislada pública.
-- Máximo una entrega cada 30 minutos; cuenta la última válida antes del cierre.
+- Máximo una entrega cada 5 minutos (actualizado el día del evento; antes 30); cuenta la última válida antes del cierre.
 - Entregar CSV, código/notebook, geovisor o dashboard y tabla de replicabilidad. Finalistas: documento de máximo dos páginas.
 - IA generativa permitida como apoyo del modelo/código con declaración de herramienta, versión y uso. No compartir/publicar datos del reto.
 - Fuentes abiertas adicionales permitidas con declaración, excepto reportes de emergencias de períodos de prueba o reconstrucción de targets.

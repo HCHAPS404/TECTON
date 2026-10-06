@@ -18,8 +18,8 @@ import json
 import re
 import time
 import urllib.request
-import zipfile
 import xml.etree.ElementTree as ET
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 

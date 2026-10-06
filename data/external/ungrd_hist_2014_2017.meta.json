@@ -1,0 +1,115 @@
+{
+  "fuente": "UNGRD - Consolidado anual de atencion de emergencias",
+  "pagina": "https://portal.gestiondelriesgo.gov.co/Paginas/Consolidado-Atencion-de-Emergencias.aspx",
+  "urls": {
+    "2014": "https://portal.gestiondelriesgo.gov.co/Documents/consolidado-emergencias/EMERGENCIAS2014.xls",
+    "2015": "https://portal.gestiondelriesgo.gov.co/Documents/consolidado-emergencias/EMERGENCIAS_2015.xls"
+  },
+  "anios_usados": [
+    2014,
+    2015
+  ],
+  "anios_faltantes": [
+    2016,
+    2017
+  ],
+  "denominador_meses": 24,
+  "nota": "hist14_tasa = meses con evento / (12 * anios usados); hist14_tasa_mes = fraccion de anios usados",
+  "filtro_tipos_incluye": [
+    "INUNDACION",
+    "MOVIMIENTO EN MASA",
+    "DESLIZAMIENTO",
+    "VENDAVAL",
+    "CRECIENTE",
+    "AVENIDA",
+    "GRANIZ",
+    "TORMENTA",
+    "TEMPORAL",
+    "EROSION",
+    "SEQUIA",
+    "INCENDIO FORESTAL",
+    "INCENDIO DE COBERTURA",
+    "HURACAN",
+    "TORNADO",
+    "LLUVIA",
+    "AVALANCHA",
+    "REMOCION",
+    "DESBORDAMIENTO",
+    "MAR DE LEVA",
+    "HELADA",
+    "DESABASTECIMIENTO"
+  ],
+  "filtro_tipos_excluye": [
+    "SISMO",
+    "VOLCAN",
+    "ESTRUCTURAL",
+    "ACCIDENTE",
+    "COLAPSO",
+    "EXPLOSION"
+  ],
+  "tipos_incluidos": [
+    "AVALANCHA",
+    "AVENIDA TORRENCIAL",
+    "CRECIENTE SUBITA",
+    "DESLIZAMIENTO",
+    "EROSION",
+    "GRANIZADA",
+    "INCENDIO FORESTAL",
+    "INUNDACION",
+    "MAR DE LEVA",
+    "SEQUIA",
+    "TORMENTA ELECTRICA",
+    "VENDAVAL"
+  ],
+  "tipos_excluidos": [
+    "ACCIDENTE",
+    "ACCIDENTE AEREO",
+    "ACCIDENTE DE TRANSITO",
+    "ACCIDENTE FLUVIAL",
+    "ACCIDENTE MARITIMO",
+    "ACCIDENTE MINERO",
+    "COLAPSO",
+    "CONTAMINACION",
+    "EMERGENCIA SOCIAL",
+    "ERUPCION",
+    "EXPLOSION",
+    "FALLA GEOLOGICA",
+    "INCENDIO ESTRUCTURAL",
+    "INCENDIO VEHICULAR",
+    "OTROS",
+    "SISMO"
+  ],
+  "filas_por_anio": {
+    "2014": {
+      "filas": 3679,
+      "filas_clima": 2935
+    },
+    "2015": {
+      "filas": 3683,
+      "filas_clima": 3091
+    }
+  },
+  "municipios_divipola": 1122,
+  "municipios_con_evento": 959,
+  "codigos_sin_match_divipola": [
+    "00000",
+    "00008",
+    "00013",
+    "00018",
+    "00019",
+    "00020",
+    "00023",
+    "00044",
+    "00047",
+    "00050",
+    "00052",
+    "00054",
+    "00070",
+    "00073",
+    "00085",
+    "00091"
+  ],
+  "afectados": "columna PERSONAS (personas afectadas) sumada",
+  "divipola": "data/external/divipola_coords.csv (gdxc-w37w)",
+  "fecha_build_utc": "2026-10-06T19:16:28.451727+00:00"
+}
