@@ -87,28 +87,58 @@ class Models:
             frame[col] = pd.Categorical(x[col].astype(str), categories=self.categories[col])
         return frame
 
-    def fit_classifier_only(self, x, event):
+    def _ranker(self):
+        """XGBoost pairwise: optimiza el orden evento/no evento, que es lo que mide el AUC."""
+        import xgboost as xgb
+
+        params = self.config["model"]
+        return xgb.XGBRanker(
+            objective="rank:pairwise", n_estimators=params.get("rank_iterations", 600),
+            learning_rate=params.get("rank_learning_rate", 0.03), max_depth=params.get("rank_depth", 5),
+            min_child_weight=params.get("rank_min_child_weight", 5.0), reg_lambda=params.get("l2", 5.0),
+            colsample_bytree=params.get("max_features", 0.7), subsample=params.get("subsample", 0.8),
+            lambdarank_pair_method="mean", lambdarank_num_pair_per_sample=params.get("rank_pairs", 8),
+            tree_method="hist", enable_categorical=True, max_cat_to_onehot=1,
+            random_state=self.config["seed"], n_jobs=self.config["threads"],
+        )
+
+    def _fit_classifier(self, encoded, event, weights=None):
+        if self.config["model"].get("classifier_objective") == "pairwise":
+            frame = encoded if isinstance(encoded, pd.DataFrame) else pd.DataFrame(encoded)
+            self.classifier = self._ranker()
+            self.classifier.fit(frame, event, qid=np.zeros(len(frame), dtype=int))
+        else:
+            self.classifier.fit(encoded, event, sample_weight=weights)
+
+    def _prob(self, encoded):
+        if self.config["model"].get("classifier_objective") == "pairwise":
+            frame = encoded if isinstance(encoded, pd.DataFrame) else pd.DataFrame(encoded)
+            # Sigmoide del puntaje de ranking: monótona, conserva el AUC y deja la probabilidad en (0, 1).
+            return 1.0 / (1.0 + np.exp(-self.classifier.predict(frame)))
+        return self.classifier.predict_proba(encoded)[:, 1]
+
+    def fit_classifier_only(self, x, event, weights=None):
         self.classifier = self._build(x)[0]
-        self.classifier.fit(self._encode(x), event)
+        self._fit_classifier(self._encode(x), event, weights)
         return self
 
     def predict_proba_only(self, x):
-        return self.classifier.predict_proba(self._encode(x))[:, 1]
+        return self._prob(self._encode(x))
 
-    def fit(self, x, event, log_people):
+    def fit(self, x, event, log_people, weights=None):
         if len(np.unique(event)) != 2:
             raise ValueError("Se requieren ambas clases en entrenamiento.")
         self.classifier, self.point, self.low, self.high = self._build(x)
         encoded = self._encode(x)
-        self.classifier.fit(encoded, event)
-        self.point.fit(encoded, log_people)
-        self.low.fit(encoded, log_people)
-        self.high.fit(encoded, log_people)
+        self._fit_classifier(encoded, event, weights)
+        self.point.fit(encoded, log_people, sample_weight=weights)
+        self.low.fit(encoded, log_people, sample_weight=weights)
+        self.high.fit(encoded, log_people, sample_weight=weights)
         return self
 
     def predict(self, x):
         encoded = self._encode(x)
-        prob = self.classifier.predict_proba(encoded)[:, 1]
+        prob = self._prob(encoded)
         point = np.maximum(0, self.point.predict(encoded))
         raw_low = np.maximum(0, self.low.predict(encoded))
         raw_high = np.maximum(0, self.high.predict(encoded))

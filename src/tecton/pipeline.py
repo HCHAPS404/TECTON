@@ -81,6 +81,16 @@ def _frozen_training(train, config, options):
             np.concatenate([p[2] for p in parts]))
 
 
+def recency_weights(dates, config):
+    """Peso exponencial por antigüedad: half-life en meses. None si no se configura."""
+    half_life = config.get("training", {}).get("recency_half_life_months")
+    if not half_life:
+        return None
+    age = _months_after(pd.Timestamp(dates.min()), dates.reset_index(drop=True))
+    age = age.max() - age
+    return np.power(0.5, age / float(half_life))
+
+
 def _fit_predict_raw(train, test, config):
     feature_model = Features(**config["features"])
     x_train = feature_model.fit_transform(train)
@@ -101,7 +111,8 @@ def _fit_predict_raw(train, test, config):
     else:
         x_fit = x_train
     seeds = config.get("training", {}).get("seeds", [config["seed"]])
-    models = [Models({**config, "seed": seed}).fit(x_fit, y, z) for seed in seeds]
+    weights = recency_weights(train["fecha"], config) if not frozen and not warmup else None
+    models = [Models({**config, "seed": seed}).fit(x_fit, y, z, weights) for seed in seeds]
     outputs = [m.predict(x_test) for m in models]
     predictions = tuple(np.mean([o[i] for o in outputs], axis=0) for i in range(4))
     model = models[0]
@@ -155,6 +166,18 @@ def with_external(root, config, codes):
     return {**config, "features": {**features, "external_tables": tables}}
 
 
+def with_oni(config, frames):
+    """Inyecta la serie nacional ONI de los tres archivos oficiales si la config usa rezagos."""
+    if not config["features"].get("oni_lags"):
+        return config
+    both = pd.concat([f[["fecha", "ONI"]] for f in frames], ignore_index=True)
+    per_month = both.groupby("fecha")["ONI"].nunique()
+    if (per_month > 1).any():
+        raise ValueError("ONI no es único por mes; no es una serie nacional.")
+    series = both.drop_duplicates("fecha").set_index("fecha")["ONI"]
+    return {**config, "features": {**config["features"], "oni_series": {str(k.date()): float(v) for k, v in series.items()}}}
+
+
 def run(root: Path, config_path: Path):
     root, config_path = Path(root).resolve(), Path(config_path).resolve()
     config = json.loads(config_path.read_text(encoding="utf-8"))
@@ -164,6 +187,7 @@ def run(root: Path, config_path: Path):
     train = frames[0]
     tests = pd.concat(frames[1:], ignore_index=True)
     split_indices = fold_indices(train, config["folds"])
+    runtime_oni = with_oni(config, frames)
     slug = re.sub(r"[^a-zA-Z0-9_-]", "-", config["name"])
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ") + "-" + slug
     out = root / "runs" / run_id
@@ -198,6 +222,7 @@ def run(root: Path, config_path: Path):
         manifest["external_hashes"] = {rel: sha256(root / rel) for rel in config["features"]["external_files"]}
         dump_json(out / "manifest.json", manifest)
         config = with_external(root, config, set(train["DIVIPOLA"]))
+    config = {**config, "features": {**config["features"], **{k: v for k, v in runtime_oni["features"].items() if k == "oni_series"}}}
     folds, oof = [], []
     try:
         with threadpool_limits(limits=config["threads"]):

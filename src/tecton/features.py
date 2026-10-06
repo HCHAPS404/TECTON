@@ -24,7 +24,12 @@ class Features:
     }
 
     def __init__(self, use_history=True, smoothing=20.0, event_types=False, extra_history=(), drop=(),
-                 external_tables=None, spatial_k=0, external_derived=False):
+                 external_tables=None, spatial_k=0, external_derived=False, oni_lags=(), oni_series=None,
+                 exposure_proxy=False):
+        self.exposure_proxy = bool(exposure_proxy)
+        # Serie nacional ONI de los archivos oficiales (entrenamiento + prueba): covariable entregada, no target.
+        self.oni_lags = list(oni_lags)
+        self.oni_series = oni_series or {}
         self.external_derived = bool(external_derived)
         self.spatial_k = int(spatial_k)
         # Tablas externas ya cargadas por el pipeline: {nombre: DataFrame con DIVIPOLA [y mes]}.
@@ -69,6 +74,23 @@ class Features:
         x["departamento"] = x["DIVIPOLA"].str[:2]
         x["mes_cat"] = month.astype(str)
         x["fase_enso"] = frame["fase_enso"].fillna("Desconocida").astype(str).to_numpy()
+        if self.exposure_proxy:
+            # Tamaño de exposición: área aproximada por separación entre cabeceras y población = densidad x área.
+            area = self._area_proxy()
+            km2 = x["DIVIPOLA"].map(area).to_numpy(float)
+            x["area_proxy_km2"] = km2
+            x["log_poblacion_proxy"] = np.log1p(x["densidad_poblacional"].clip(lower=0).to_numpy() * km2)
+        if self.oni_lags:
+            series = pd.Series(self.oni_series, dtype=float)
+            series.index = pd.to_datetime(series.index)
+            dates = pd.to_datetime(frame["fecha"]).reset_index(drop=True)
+            for lag in self.oni_lags:
+                # lag > 0: meses anteriores; lag < 0: meses siguientes, ambos presentes en los archivos entregados.
+                shifted = dates - pd.DateOffset(months=lag)
+                x[f"oni_lag{lag}" if lag > 0 else f"oni_lead{-lag}"] = shifted.map(series).to_numpy(float)
+            past = [lag for lag in self.oni_lags if lag > 0]
+            if past:
+                x["oni_tendencia"] = x["ONI"] - x[f"oni_lag{max(past)}"]
         for name, table in self.external_tables.items():
             keys = [k for k in ["DIVIPOLA", "mes"] if k in table.columns]
             left = pd.DataFrame({"DIVIPOLA": x["DIVIPOLA"].to_numpy(), "mes": month})
@@ -242,3 +264,16 @@ class Features:
             season[stat] = values
         result["spatial_season"] = pd.DataFrame(season)
         return result
+
+    def _area_proxy(self):
+        if getattr(self, "_area_cache", None) is None:
+            coords = self.external_tables.get("divipola_coords")
+            if coords is None:
+                raise ValueError("exposure_proxy requiere data/external/divipola_coords.csv en external_files.")
+            lat, lon = np.radians(coords["lat"].to_numpy()), np.radians(coords["lon"].to_numpy())
+            dx = (lon[:, None] - lon[None, :]) * np.cos((lat[:, None] + lat[None, :]) / 2)
+            km = np.hypot(dx, lat[:, None] - lat[None, :]) * 6371.0
+            np.fill_diagonal(km, np.inf)
+            mean3 = np.sort(km, axis=1)[:, :3].mean(axis=1)
+            self._area_cache = dict(zip(coords["DIVIPOLA"], mean3 ** 2))
+        return self._area_cache
