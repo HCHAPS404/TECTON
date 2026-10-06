@@ -33,3 +33,4 @@ datos/
 hackathon_datos.zip
 ImagenesRecomendaciones.zip
 *.local.md
+data/external/cache/
