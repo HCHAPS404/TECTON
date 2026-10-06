@@ -25,7 +25,9 @@ class Features:
 
     def __init__(self, use_history=True, smoothing=20.0, event_types=False, extra_history=(), drop=(),
                  external_tables=None, spatial_k=0, external_derived=False, oni_lags=(), oni_series=None,
-                 exposure_proxy=False):
+                 exposure_proxy=False, econ=None):
+        # Bloque econométrico: {"garch": bool, "official_lags": bool, "dane": DataFrame, "ungrd": DataFrame}.
+        self.econ = dict(econ or {})
         self.exposure_proxy = bool(exposure_proxy)
         # Serie nacional ONI de los archivos oficiales (entrenamiento + prueba): covariable entregada, no target.
         self.oni_lags = list(oni_lags)
@@ -172,6 +174,8 @@ class Features:
                 muni_prior, seasonal_prior, extra,
             )
             x = pd.concat([x, history], axis=1)
+        if self.econ:
+            x = pd.concat([x, self._econ(work, fit=True)], axis=1)
         # Guardar estadísticas hasta el corte para cualquier horizonte de inferencia.
         self.global_stats = work[self.stats].sum()
         self.tables = {
@@ -205,7 +209,43 @@ class Features:
                 extra.update(self._spatial_transform(keys))
             global_stats = pd.DataFrame([self.global_stats.to_dict()] * len(frame))
             x = pd.concat([x, self._history(global_stats, *tables, extra)], axis=1)
+        if self.econ:
+            x = pd.concat([x, self._econ(frame.reset_index(drop=True), fit=False)], axis=1)
         return x
+
+    def _econ(self, frame, fit):
+        """Solo meses <= corte. En entrenamiento, cada fila ve meses estrictamente anteriores a ella."""
+        from tecton.econometria import OFFICIAL_COUNTS, prior_means
+        from tecton.fuentes_publicas import CLIMATE, PUBLIC_CAP
+        from tecton.garch import PanelGarch
+
+        if fit:
+            self.cutoff = frame["fecha"].max()
+        parts = []
+        if self.econ.get("garch"):
+            if fit:
+                self.garch_model = PanelGarch().fit(frame, self.cutoff)
+            parts.append(self.garch_model.transform(frame).reset_index(drop=True))
+        if self.econ.get("official_lags"):
+            if fit:
+                self.official = frame[["DIVIPOLA", "fecha", *OFFICIAL_COUNTS]].copy()
+            parts.append(prior_means(frame, self.official, OFFICIAL_COUNTS).add_prefix("oficial_").reset_index(drop=True))
+        ungrd = self.econ.get("ungrd")
+        if ungrd is not None and len(ungrd):
+            public = ungrd[ungrd["fecha"] <= min(self.cutoff, PUBLIC_CAP)]
+            parts.append(prior_means(frame, public, list(CLIMATE)).add_prefix("publico_").reset_index(drop=True))
+        dane = self.econ.get("dane")
+        if dane is not None and len(dane):
+            keys = pd.DataFrame({"DIVIPOLA": frame["DIVIPOLA"].astype(str).to_numpy(),
+                                 "anio": pd.to_datetime(frame["fecha"]).dt.year.clip(upper=2022).to_numpy()})
+            table = dane.assign(DIVIPOLA=dane["DIVIPOLA"].astype(str).str.zfill(5), anio=dane["anio"].astype(int))
+            level = keys.merge(table[["DIVIPOLA", "anio", "poblacion"]], on=["DIVIPOLA", "anio"], how="left",
+                               validate="many_to_one")["poblacion"]
+            level = np.log1p(level.astype(float))
+            if fit:
+                self.dane_fill = float(level.median()) if level.notna().any() else 0.0
+            parts.append(pd.DataFrame({"dane_log_poblacion": level.fillna(self.dane_fill).to_numpy()}))
+        return pd.concat(parts, axis=1) if parts else pd.DataFrame(index=range(len(frame)))
 
     def _neighbors(self, munis):
         coords = self.external_tables.get("divipola_coords")

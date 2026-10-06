@@ -96,3 +96,22 @@ Runs completos:
 - 20261006T172320268707Z-lgbm-clima-vulnerabilidad (x11): puntos 24.63; stress 12 m 0.7413; lejano 0.7038 / 21.95. vs perfil: empate (P=0.56).
 - Mezcla OOF 50/50 perfil + x11: 24.70 (AUC 0.7268). Implementado como `ensemble` reproducible en el pipeline; run completo en curso.
 - Límite de entrega confirmado: 14:45.
+
+## Motor econométrico, 6 de octubre
+
+- Familia `econ` en `configs/econ.json`: valla cloglog, medias de Mundlak, cuantiles de la mezcla con ceros. Run `20261006T155655465037Z-econ-hurdle-mundlak`.
+- Cortes: entrenamiento 2018-01 a 2022-09; prueba pública 2022-10 a 2024-04 con historia congelada; prueba privada 2024-05 a 2025-12 con historia de entrenamiento real más la predicción pública. No se usaron reportes UNGRD desde 2022-10.
+- Fuentes: CSV oficial; DANE PPED-AreaMun-2018-2042 (cobertura DIVIPOLA 1.000, años 2018-2022); UNGRD wwkg-r6te (2019-01 a 2022-09, cobertura 0.917). Citas en `docs/fuentes_datos.csv`.
+- Validación agregada: AUC medio 0.668, RMSE-log 1.286, Winkler 3.321, cobertura 0.922, puntos_75 18.4. Estrés 12 meses: AUC 0.691, cobertura 0.922. No promovido.
+- GARCH(1,1) de panel (`src/tecton/garch.py`): varianza condicional de log1p personas por municipio; alfa y beta comunes estimados por cuasi-verosimilitud solo con meses <= corte; después del corte, pronóstico a h meses (mismo para pública y privada). Test de fuga: la varianza inicial usaba el máximo de todos los meses; corregido.
+- Integrado al modelo general: `features.econ` (GARCH + rezagos de conteos oficiales por tipo + UNGRD wwkg-r6te 2019-01 a 2022-09 + log población DANE 2018-2022) en `Features`, con hashes en el manifest. Config `configs/lgbm-espacial-ideam-econ.json` = champion + este bloque (una hipótesis).
+- PC, mismos folds y semillas, champion re-ejecutado localmente (reproduce stress 12 m 0.7418 y lejano 0.6955):
+
+| run | puntos_75 | AUC | RMSE-log | Winkler | cobertura | stress 12 m | lejano 13-24 m |
+|---|---|---|---|---|---|---|---|
+| lgbm-espacial-ideam | 24.34 | 0.7238 | 1.274 | 3.216 | 0.929 | 26.20 (AUC 0.7418) | 21.02 (AUC 0.6955) |
+| + bloque econométrico | 24.61 | 0.7266 | 1.275 | 3.203 | 0.930 | 26.38 (AUC 0.7438) | 21.12 (AUC 0.6972) |
+
+- AUC por fold (econ − champion): +0.0045, +0.0053, +0.0003, −0.0007, +0.0043. Pendiente: bootstrap pareado (`scripts/stat_compare.py`) y promoción por harness; corre ~2x más lento (≈4 min por fold en la PC).
+- EQTransformer no se implementó: es una red neuronal de detección sísmica sobre formas de onda (regla 8 prohíbe modelos neuronales y no aplica a un panel municipio-mes). Sustituto admisible si se quiere la señal: catálogo sísmico del SGC 2018-01 a 2022-09 como rezago municipal.
+- Reestimado con CatBoost (DIVIPOLA categórica, 300 iteraciones). Run `20261006T160711740047Z-econ-panel-boost`. AUC medio 0.701, RMSE-log 1.276, Winkler 3.555, cobertura 0.720, puntos_75 21.6. Estrés 12 meses: AUC 0.738, RMSE-log 1.249. El corte 2021-10 a 2022-03 llegó a AUC 0.782 y RMSE-log 1.091. El corte más reciente, 2022-04 a 2022-09, quedó en AUC 0.687. No promovido.
