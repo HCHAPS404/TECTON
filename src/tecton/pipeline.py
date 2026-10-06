@@ -13,12 +13,13 @@ import numpy as np
 import pandas as pd
 from threadpoolctl import threadpool_limits
 
+from tecton import calibration
 from tecton.features import Features
 from tecton.metrics import score
 from tecton.models import Models
 from tecton.schema import KEYS, OUTPUT, load_inputs, sha256, validate_predictions
 
-METRIC_PROTOCOL = {"version": 2, "risk": "AUC-ROC", "magnitude": "RMSE-log1p-all-rows", "interval": "Winkler-log1p-alpha0.2", "points": "notebook-base-PNUD-null-normalized-75"}
+METRIC_PROTOCOL = {"version": 3, "risk": "AUC-ROC", "magnitude": "RMSE-log1p-all-rows", "interval": "Winkler-log1p-alpha0.2", "points": "notebook-base-PNUD-null-normalized-75"}
 
 
 def dump_json(path, payload):
@@ -52,7 +53,7 @@ def fold_indices(train, folds):
     return result
 
 
-def fit_predict(train, test, config):
+def _fit_predict_raw(train, test, config):
     feature_model = Features(**config["features"])
     x_train = feature_model.fit_transform(train)
     x_test = feature_model.transform(test)
@@ -60,6 +61,19 @@ def fit_predict(train, test, config):
     z = np.log1p(train["personas_desplazadas"].to_numpy(float))
     model = Models(config).fit(x_train, y, z)
     return model.predict(x_test), feature_model, model, list(x_train.columns)
+
+
+def fit_predict(train, test, config):
+    predictions, feature_model, model, features = _fit_predict_raw(train, test, config)
+    months = config.get("calibration", {}).get("months", 0)
+    if months:
+        # Ajustar con los últimos meses del MISMO entrenamiento, usando un modelo que no los vio.
+        cutoff = train["fecha"].max() - pd.DateOffset(months=months)
+        inner_train, inner_valid = train[train["fecha"] <= cutoff], train[train["fecha"] > cutoff]
+        inner, _, _, _ = _fit_predict_raw(inner_train, inner_valid, config)
+        model.calibration = calibration.fit(np.log1p(inner_valid["personas_desplazadas"].to_numpy(float)), *inner)
+        predictions = calibration.apply(model.calibration, predictions)
+    return predictions, feature_model, model, features
 
 
 def run(root: Path, config_path: Path):
@@ -168,19 +182,20 @@ def promotion_reasons(candidate, candidate_manifest, current=None, current_manif
     if candidate_manifest["protocol_hash"] != current_manifest["protocol_hash"]:
         reasons.append("Cambió el protocolo de validación.")
     c, old = candidate["summary"], current["summary"]
-    if c["auc_mean"] < old["auc_mean"] + 0.002:
-        reasons.append("AUC medio no mejora al menos 0.002.")
-    improvements = sum(new["auc"] > prev["auc"] for new, prev in zip(candidate["folds"], current["folds"], strict=True))
+    # La nota oficial es compuesta: promover por puntos_75 sin sacrificar AUC (50% de la nota).
+    if c["puntos_75_mean"] < old["puntos_75_mean"] + 0.2:
+        reasons.append("puntos_75 medio no mejora al menos 0.2.")
+    if c["auc_mean"] < old["auc_mean"] - 0.002:
+        reasons.append("AUC medio baja más de 0.002.")
+    improvements = sum(new["puntos_75"] > prev["puntos_75"] for new, prev in zip(candidate["folds"], current["folds"], strict=True))
     if improvements < np.ceil(len(candidate["folds"]) * 0.6):
-        reasons.append("No mejora en al menos 60% de los folds.")
+        reasons.append("No mejora puntos_75 en al menos 60% de los folds.")
     if candidate["folds"][-1]["auc"] < current["folds"][-1]["auc"] - 0.005:
         reasons.append("El último fold pierde más de 0.005 AUC.")
     if c["rmse_log_mean"] > old["rmse_log_mean"] * 1.03:
         reasons.append("RMSE-log empeora más de 3%.")
     if c["winkler_log_mean"] > old["winkler_log_mean"] * 1.10:
         reasons.append("Winkler empeora más de 10%.")
-    if "puntos_75_mean" in c and "puntos_75_mean" in old and c["puntos_75_mean"] < old["puntos_75_mean"]:
-        reasons.append("Baja la nota automática normalizada (puntos_75).")
     if "stress_12_months" in candidate and "stress_12_months" in current:
         if candidate["stress_12_months"]["auc"] < current["stress_12_months"]["auc"] - 0.005:
             reasons.append("La prueba de 12 meses pierde más de 0.005 AUC.")

@@ -1,0 +1,48 @@
+{
+  "name": "baseline-calibrado",
+  "data_dir": "data/raw",
+  "strict": true,
+  "seed": 42,
+  "threads": 2,
+  "model": {
+    "family": "hist",
+    "iterations": 150,
+    "learning_rate": 0.06,
+    "depth": 6
+  },
+  "features": {
+    "use_history": true,
+    "smoothing": 20.0
+  },
+  "stress_test": true,
+  "folds": [
+    {
+      "train_end": "2020-03-01",
+      "valid_start": "2020-04-01",
+      "valid_end": "2020-09-01"
+    },
+    {
+      "train_end": "2020-09-01",
+      "valid_start": "2020-10-01",
+      "valid_end": "2021-03-01"
+    },
+    {
+      "train_end": "2021-03-01",
+      "valid_start": "2021-04-01",
+      "valid_end": "2021-09-01"
+    },
+    {
+      "train_end": "2021-09-01",
+      "valid_start": "2021-10-01",
+      "valid_end": "2022-03-01"
+    },
+    {
+      "train_end": "2022-03-01",
+      "valid_start": "2022-04-01",
+      "valid_end": "2022-09-01"
+    }
+  ],
+  "calibration": {
+    "months": 12
+  }
+}

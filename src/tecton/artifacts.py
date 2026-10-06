@@ -71,7 +71,11 @@ th{{background:#ddecf0}}pre{{padding:18px;background:#eaf0f3}}input{{padding:10p
     target.write_text(content, encoding="utf-8")
 
 
-def portable_notebook(source_zip: Path, config: dict, target: Path):
+def portable_notebook(source_zip: Path, config: dict, target: Path, data_url: str = ""):
+    """Notebook de Colab con el motor embebido. Solo datos oficiales; sin modo sintético.
+
+    data_url solo se inyecta en copias no versionadas para el equipo (el repo es público).
+    """
     payload = base64.b64encode(source_zip.read_bytes()).decode()
     digest = hashlib.sha256(source_zip.read_bytes()).hexdigest()
     config = {**config, "data_dir": "data/raw"}
@@ -84,31 +88,27 @@ def portable_notebook(source_zip: Path, config: dict, target: Path):
         cells.append(cell)
 
     add("markdown", """# TECTON PNUD — entrenamiento y validación en Colab
-Código incluido y verificado por SHA256; el notebook llama al mismo motor Python, no reimplementa el entrenamiento. CPU, Python 3.11–3.13.
-No contiene targets ni datos oficiales: los tres CSV se suben en la celda de datos.
+Motor embebido y verificado por SHA256; llama al mismo código del repositorio, no reimplementa el modelo. CPU, Python 3.10–3.13.
 
-Reglas del reto: no compartir los datos fuera del equipo, no editar predicciones a mano, cierre 15:00 hora Colombia por el formulario oficial.
+**Uso:** Entorno de ejecución → Ejecutar todo. Para otro experimento, cambiar `CONFIG_NAME` y ejecutar desde **Configuración**; los datos ya cargados se reutilizan.
 
-Flujo: ejecutar todo una vez. Para otro experimento, cambiar `CONFIG_NAME` en la primera celda y ejecutar de nuevo desde **Configuración**; los datos ya cargados se reutilizan.
+Reglas del reto: no compartir los datos fuera del equipo, no editar predicciones a mano, entregar solo por el formulario oficial antes del cierre.
 """)
     add("code", """from pathlib import Path
 
-INSTALL_DEPENDENCIES = True
-USE_SYNTHETIC_DATA = False
-# None = configuración embebida (la del run de entrega). Otras: 'first_submission', 'baseline', 'catboost'.
+# Configuración: None = la embebida (recomendada). Otras: 'first_submission', 'baseline', 'baseline-cal', 'catboost', 'catboost-cal'.
 CONFIG_NAME = None
-# Hilos de CPU; None conserva los de la configuración. Cambiarlos no cambia el protocolo temporal.
+# Hilos de CPU; None conserva los de la configuración (2, como Colab gratuito).
 THREADS = None
-# True guarda runs/ y state/ en el Drive del equipo para sobrevivir desconexiones. No compartir esa carpeta.
+# Enlace de Drive a hackathon_datos.zip del PNUD. No publicar esta copia del notebook.
+URL_DATOS = """ + repr(data_url) + """
+# True guarda runs/ y state/ en el Drive del equipo para sobrevivir desconexiones.
 USE_DRIVE = False
 DRIVE_FOLDER = 'TECTON_PNUD'
-# Enlace de Drive a hackathon_datos.zip compartido por el PNUD. Pegarlo solo en la copia de Colab del equipo; no versionarlo.
-URL_DATOS = ''
-# Alternativa: subir hackathon_datos.zip con el ícono de carpeta, o los tres CSV cuando se soliciten.
-DATA_ZIP = Path('hackathon_datos.zip')
-LOCAL_DATA_DIR = Path('data/raw')
 """)
-    add("code", """try:
+    add("code", """import base64, hashlib, io, json, shutil, sys, zipfile
+
+try:
     from google.colab import drive, files
     IN_COLAB = True
 except ImportError:
@@ -119,9 +119,7 @@ if USE_DRIVE and IN_COLAB:
 else:
     ROOT = Path.cwd() / 'tecton_colab'
 ROOT.mkdir(parents=True, exist_ok=True)
-print('Proyecto:', ROOT)
-""")
-    add("code", "import base64, hashlib, io, json, shutil, zipfile\n" + f"payload = base64.b64decode({payload!r})\nassert hashlib.sha256(payload).hexdigest() == {digest!r}\n" + """# Reemplazar el código de una versión anterior; runs/, state/ y data/ se conservan.
+""" + f"payload = base64.b64decode({payload!r})\nassert hashlib.sha256(payload).hexdigest() == {digest!r}\n" + """# Reemplazar el código de una versión anterior; runs/, state/ y data/ se conservan.
 for folder in ['src', 'configs', 'docs']:
     shutil.rmtree(ROOT / folder, ignore_errors=True)
 with zipfile.ZipFile(io.BytesIO(payload)) as z:
@@ -129,89 +127,93 @@ with zipfile.ZipFile(io.BytesIO(payload)) as z:
         p = Path(item.filename)
         assert not p.is_absolute() and '..' not in p.parts
     z.extractall(ROOT)
+print('Proyecto:', ROOT)
 """)
     add("code", """import importlib.metadata as metadata
+import importlib.util
 import subprocess
-import sys
 
-if not ((3, 11) <= sys.version_info[:2] < (3, 14)):
-    raise RuntimeError('Este scaffold requiere Python 3.11–3.13; seleccionar un runtime compatible.')
-if INSTALL_DEPENDENCIES:
-    subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-q', '-r', str(ROOT / 'requirements-colab.txt')])
+# Usar las bibliotecas que ya trae Colab; instalar solo lo que falte. Sin reinicios de sesión.
 pins = {}
 for line in (ROOT / 'requirements-colab.txt').read_text().splitlines():
     if '==' in line and not line.startswith('#'):
         name, version = line.split(';')[0].strip().split('==')
         pins[name.lower()] = version
-stale = []
-for name, module in [('numpy', 'numpy'), ('pandas', 'pandas'), ('scikit-learn', 'sklearn'), ('catboost', 'catboost')]:
-    loaded = sys.modules.get(module)
-    found = getattr(loaded, '__version__', None) if loaded else metadata.version(name)
-    if found != pins[name]:
-        stale.append(f'{name} {found} != {pins[name]}')
-if stale:
-    raise RuntimeError('Versiones distintas del lock: ' + ', '.join(stale) + '. Reiniciar la sesión y ejecutar desde el inicio.')
-# Descargar módulos tecton de una versión anterior del código en esta misma sesión.
+needed = {'numpy': 'numpy', 'pandas': 'pandas', 'scikit-learn': 'sklearn', 'joblib': 'joblib', 'threadpoolctl': 'threadpoolctl', 'catboost': 'catboost', 'gdown': 'gdown'}
+missing = [name for name, module in needed.items() if importlib.util.find_spec(module) is None]
+if missing:
+    spec = [f'{n}=={pins[n]}' if n in pins else n for n in missing]
+    print('Instalando:', spec)
+    subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-q', *spec])
 for module in [m for m in sys.modules if m == 'tecton' or m.startswith('tecton.')]:
     del sys.modules[module]
 if str(ROOT / 'src') not in sys.path:
     sys.path.insert(0, str(ROOT / 'src'))
-print('Dependencias del lock:', {n: pins[n] for n in ['numpy', 'pandas', 'scikit-learn', 'catboost']})
+print('Versiones en uso:', {n: metadata.version(n) for n in ['numpy', 'pandas', 'scikit-learn', 'catboost']})
 """)
-    add("markdown", "## Datos\nIgual que el notebook base del PNUD: pegar `URL_DATOS` o subir `hackathon_datos.zip`. Si no hay ZIP, se piden los tres CSV con su nombre exacto. Se cargan una vez por sesión (o una sola vez si `USE_DRIVE=True`). No se imprimen filas. Para un ensayo, activar `USE_SYNTHETIC_DATA` en la primera celda.\n")
-    add("code", """from tecton.demo import generate
+    add("markdown", "## Datos\nDescarga directa de `hackathon_datos.zip` desde `URL_DATOS`; los CSV se copian sin modificar a `data/raw`. Solo si la descarga falla se pide subir el ZIP. No se imprimen filas.\n")
+    add("code", """import re
+import urllib.request
 
 NAMES = ['entrenamiento.csv', 'prueba_equipos.csv', 'prueba_oculta.csv']
-if USE_SYNTHETIC_DATA:
-    generate(ROOT / 'data/synthetic')
-    print('Datos INVENTADOS en data/synthetic; solo ensayo.')
-else:
-    raw = ROOT / 'data/raw'
-    raw.mkdir(parents=True, exist_ok=True)
-    missing = [name for name in NAMES if not (raw / name).exists()]
-    if missing and URL_DATOS and not DATA_ZIP.exists():
-        import re
+raw = ROOT / 'data/raw'
+raw.mkdir(parents=True, exist_ok=True)
+DATA_ZIP = ROOT / 'hackathon_datos.zip'
+
+
+def descargar(url, destino):
+    match = re.search(r'/d/([A-Za-z0-9_-]+)', url) or re.search(r'id=([A-Za-z0-9_-]+)', url)
+    direct = 'https://drive.google.com/uc?export=download&id=' + match.group(1) if match else url
+    try:
         import gdown
-        # Usar el id del archivo: compatible con versiones de gdown con y sin el argumento fuzzy.
-        file_id = re.search(r'/d/([A-Za-z0-9_-]+)', URL_DATOS) or re.search(r'id=([A-Za-z0-9_-]+)', URL_DATOS)
-        gdown.download('https://drive.google.com/uc?id=' + (file_id.group(1) if file_id else URL_DATOS), str(DATA_ZIP), quiet=True)
-    if missing and DATA_ZIP.exists():
-        # El ZIP oficial puede traer subcarpetas; se copian los CSV por nombre exacto, sin modificarlos.
-        with zipfile.ZipFile(DATA_ZIP) as z:
-            for item in z.infolist():
-                if Path(item.filename).name in NAMES + ['diccionario_datos.csv'] and not item.is_dir():
-                    (raw / Path(item.filename).name).write_bytes(z.read(item))
-        missing = [name for name in NAMES if not (raw / name).exists()]
-    if missing and IN_COLAB:
+        gdown.download(direct, str(destino), quiet=True)
+    except Exception as error:
+        print('gdown falló, intento descarga directa:', type(error).__name__)
+    if not destino.exists() or not zipfile.is_zipfile(destino):
+        urllib.request.urlretrieve(direct, destino)
+    if not zipfile.is_zipfile(destino):
+        destino.unlink(missing_ok=True)
+        raise ValueError('La descarga no devolvió un ZIP; revisar permisos del enlace.')
+
+
+if any(not (raw / name).exists() for name in NAMES):
+    if not DATA_ZIP.exists() and URL_DATOS:
+        try:
+            descargar(URL_DATOS, DATA_ZIP)
+        except Exception as error:
+            print('No se pudo descargar:', error)
+    if not DATA_ZIP.exists() and Path('hackathon_datos.zip').exists():
+        shutil.copy2('hackathon_datos.zip', DATA_ZIP)
+    if not DATA_ZIP.exists() and IN_COLAB:
+        print('Subir hackathon_datos.zip')
         uploaded = files.upload()
-        for name in missing:
-            if name not in uploaded:
-                raise ValueError('Falta el archivo con nombre exacto: ' + name)
-            (raw / name).write_bytes(uploaded[name])
-    else:
-        for name in missing:
-            shutil.copy2(LOCAL_DATA_DIR / name, raw / name)
-    print('CSV oficiales listos en', raw)
+        name = next((n for n in uploaded if n.endswith('.zip')), None)
+        if name is None:
+            raise ValueError('Se esperaba hackathon_datos.zip.')
+        DATA_ZIP.write_bytes(uploaded[name])
+    if not DATA_ZIP.exists():
+        raise FileNotFoundError('Falta hackathon_datos.zip: definir URL_DATOS o dejar el ZIP junto al notebook.')
+    with zipfile.ZipFile(DATA_ZIP) as z:
+        for item in z.infolist():
+            if Path(item.filename).name in NAMES + ['diccionario_datos.csv', 'formato_entrega.csv'] and not item.is_dir():
+                (raw / Path(item.filename).name).write_bytes(z.read(item))
+faltan = [name for name in NAMES if not (raw / name).exists()]
+if faltan:
+    raise FileNotFoundError(f'El ZIP no trae {faltan}.')
+print('CSV oficiales listos en', raw)
 """)
-    add("markdown", "## Configuración y auditoría\nSolo resúmenes agregados: filas, municipios, fechas, nulos y prevalencia.\n")
+    add("markdown", "## Configuración\nAuditoría estricta del contrato. Solo resúmenes agregados.\n")
     add("code", """from tecton.pipeline import dump_json
 from tecton.schema import load_inputs
 
 EMBEDDED_CONFIG = json.loads(""" + repr(json.dumps(config)) + """)
-SMOKE = {None: 'smoke', 'first_submission': 'smoke', 'baseline': 'baseline-smoke', 'catboost': 'catboost-smoke'}
-if USE_SYNTHETIC_DATA:
-    config = json.loads((ROOT / 'configs' / f"{SMOKE.get(CONFIG_NAME, CONFIG_NAME)}.json").read_text())
-elif CONFIG_NAME:
-    config = json.loads((ROOT / 'configs' / f'{CONFIG_NAME}.json').read_text())
-else:
-    config = EMBEDDED_CONFIG
-if config['data_dir'] != ('data/synthetic' if USE_SYNTHETIC_DATA else 'data/raw'):
-    raise ValueError('La configuración no corresponde al modo de datos elegido.')
+config = json.loads((ROOT / 'configs' / f'{CONFIG_NAME}.json').read_text()) if CONFIG_NAME else EMBEDDED_CONFIG
+config = {**config, 'data_dir': 'data/raw', 'strict': True}
 if THREADS:
     config = {**config, 'threads': int(THREADS)}
-_, audit, _, synthetic = load_inputs(ROOT / config['data_dir'], config['strict'])
+_, audit, _, _ = load_inputs(ROOT / config['data_dir'], True)
 dump_json(ROOT / 'configs/colab_run.json', config)
-print(json.dumps({'config': config['name'], 'threads': config['threads'], 'synthetic': synthetic, 'audit': audit}, indent=2, ensure_ascii=False))
+print(json.dumps({'config': config['name'], 'threads': config['threads'], 'audit': audit}, indent=2, ensure_ascii=False))
 """)
     add("markdown", "## Entrenamiento\nImprime AUC, RMSE-log, cobertura y segundos por fold. Cada run queda en una carpeta nueva; un fallo no reemplaza el champion.\n")
     add("code", "from tecton.pipeline import run\n\nrun_id = run(ROOT, ROOT / 'configs/colab_run.json')\nprint('Experimento:', run_id)\n")
@@ -219,19 +221,21 @@ print(json.dumps({'config': config['name'], 'threads': config['threads'], 'synth
 from IPython.display import HTML, display
 from tecton.pipeline import compare_runs
 
-pointer = ROOT / 'state' / ('champion-demo.json' if USE_SYNTHETIC_DATA else 'champion.json')
+pointer = ROOT / 'state' / 'champion.json'
 print('Champion:', json.loads(pointer.read_text())['run_id'] if pointer.exists() else 'sin champion')
-display(pd.DataFrame(compare_runs(ROOT)))
+columns = ['run_id', 'puntos_75_mean', 'auc_mean', 'rmse_log_mean', 'winkler_log_mean', 'coverage_80_mean', 'last_fold_auc', 'stress_auc', 'folds', 'elapsed_seconds']
+table = pd.DataFrame(compare_runs(ROOT))
+display(table[[c for c in columns if c in table.columns]])
 """)
-    add("markdown", "## Promoción\nEscribir el `run_id` y ejecutar. El harness rechaza runs incompletos, sin cinco folds/stress o que no superan al champion bajo el mismo protocolo.\n")
+    add("markdown", "## Promoción\nEscribir el `run_id` y ejecutar. El harness rechaza runs incompletos, sin cinco folds y stress, o que no superan al champion bajo el mismo protocolo.\n")
     add("code", """PROMOTE_RUN_ID = None
 PROMOTE_REASON = 'Cinco folds, stress de 12 meses y QA revisados'
 if PROMOTE_RUN_ID:
     from tecton.pipeline import promote
-    print(json.dumps(promote(ROOT, PROMOTE_RUN_ID, PROMOTE_REASON, demo=USE_SYNTHETIC_DATA), indent=2, ensure_ascii=False))
+    print(json.dumps(promote(ROOT, PROMOTE_RUN_ID, PROMOTE_REASON), indent=2, ensure_ascii=False))
 """)
     add("code", "display(HTML((ROOT / 'runs' / run_id / 'dashboard.html').read_text()))\n")
-    add("markdown", "## Descargas\n1. **Resumen para revisión**: métricas, manifiestos, auditoría y comparación. Sin filas, sin OOF ni predicciones; es lo que se comparte con el asistente de código.\n2. **Entrega**: CSV, notebook reproducible, replicabilidad y declaraciones. Va al formulario oficial.\n3. **Run para el geovisor**: el run sin `oof.csv`, para importarlo en la PC con `tecton import-run`.\n")
+    add("markdown", "## Descargas\n1. **Resumen para revisión**: métricas, manifiestos, auditoría y comparación; sin filas, OOF ni predicciones.\n2. **Entrega**: `predicciones.csv` para el formulario, replicabilidad y declaraciones.\n3. **Run para el geovisor**: el run sin `oof.csv`, para `tecton import-run` en la PC.\n")
     add("code", """from tecton.artifacts import review_pack
 
 review = review_pack(ROOT)
@@ -247,13 +251,17 @@ if not selected:
     raise ValueError('Indicar EXPORT_RUN_ID.')
 delivery = ROOT / 'delivery' / selected
 if not delivery.exists():
-    bundle(ROOT, run_id=selected, demo=USE_SYNTHETIC_DATA)
+    bundle(ROOT, run_id=selected)
+csv_entrega = ROOT / 'export' / f'predicciones-{selected}.csv'
+csv_entrega.parent.mkdir(parents=True, exist_ok=True)
+shutil.copy2(delivery / 'predicciones.csv', csv_entrega)
 delivery_zip = zip_folder(delivery, ROOT / 'export' / f'entrega-{selected}.zip')
 run_zip = run_pack(ROOT, selected)
-print('Entrega:', delivery_zip)
+print('CSV para el formulario:', csv_entrega)
+print('Entrega completa:', delivery_zip)
 print('Run para geovisor:', run_zip)
-print('Completar ai_usage.csv y revisar replicabilidad antes de enviar. El formulario lo envía el equipo.')
 if IN_COLAB:
+    files.download(str(csv_entrega))
     files.download(str(delivery_zip))
     files.download(str(run_zip))
 """)

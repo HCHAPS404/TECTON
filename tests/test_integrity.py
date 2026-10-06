@@ -116,8 +116,8 @@ class IntegrityTests(unittest.TestCase):
 
     def test_promotion_rejects_regression_and_data_change(self):
         manifest = {"status": "complete", "qa_passed": True, "data_hashes": {"a": "1"}, "protocol_hash": "same"}
-        old = {"summary": {"auc_mean": 0.8, "rmse_log_mean": 1, "winkler_log_mean": 2}, "folds": [{"auc": 0.8}] * 5}
-        better = {"summary": {"auc_mean": 0.81, "rmse_log_mean": 1, "winkler_log_mean": 2}, "folds": [{"auc": 0.81}] * 5}
+        old = {"summary": {"auc_mean": 0.8, "rmse_log_mean": 1, "winkler_log_mean": 2, "puntos_75_mean": 30}, "folds": [{"auc": 0.8, "puntos_75": 30}] * 5}
+        better = {"summary": {"auc_mean": 0.8, "rmse_log_mean": 0.9, "winkler_log_mean": 1.5, "puntos_75_mean": 31}, "folds": [{"auc": 0.8, "puntos_75": 31}] * 5}
         self.assertEqual(promotion_reasons(better, manifest, old, manifest), [])
         self.assertTrue(promotion_reasons(old, manifest, old, manifest))
         changed = {**manifest, "data_hashes": {"a": "different"}}

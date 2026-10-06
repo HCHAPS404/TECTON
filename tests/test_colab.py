@@ -44,8 +44,11 @@ class ColabFlowTests(unittest.TestCase):
             for i, cell in enumerate(code):
                 compile(cell, f"cell-{i}", "exec")
             joined = "\n".join(code)
-            for marker in ["INSTALL_DEPENDENCIES = True", "USE_SYNTHETIC_DATA = False", "CONFIG_NAME = None", "review_pack", "run_pack", "compare_runs"]:
+            for marker in ["CONFIG_NAME = None", "URL_DATOS = ''", "review_pack", "run_pack", "compare_runs"]:
                 self.assertIn(marker, joined)
+            self.assertNotIn("USE_SYNTHETIC_DATA", joined)
+            portable_notebook(source, CONFIG, target, "https://drive.google.com/file/d/abc/view")
+            self.assertIn("URL_DATOS = 'https://drive.google.com/file/d/abc/view'", target.read_text())
 
     def test_review_pack_has_only_aggregates(self):
         with zipfile.ZipFile(review_pack(self.root)) as archive:

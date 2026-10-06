@@ -42,7 +42,9 @@ def main():
     geography = sub.add_parser("geography", help="Descargar polígonos municipales abiertos de DANE")
     geography.add_argument("--out", type=Path, default=Path("data/geography/municipios.geojson"))
     notebook = sub.add_parser("notebook")
-    notebook.add_argument("--config", type=Path, default=Path("configs/baseline.json"))
+    notebook.add_argument("--config", type=Path, default=Path("configs/baseline-cal.json"))
+    notebook.add_argument("--data-url", default="", help="Enlace de Drive de los datos; solo para copias no versionadas")
+    notebook.add_argument("--out", type=Path, default=Path("notebooks/tecton_colab.ipynb"))
     sub.add_parser("freeze")
     sub.add_parser("clock")
     record = sub.add_parser("record-submission")
@@ -94,11 +96,13 @@ def main():
         elif args.command == "notebook":
             from tecton.artifacts import portable_notebook, snapshot
 
-            target = root / "notebooks/tecton_colab.ipynb"
+            target = root / args.out
+            if args.data_url and target.resolve().is_relative_to(root) and target.resolve().parts[len(root.parts)] not in ["colab", "ColabBase", "export"]:
+                raise ValueError("Un notebook con enlace de datos solo puede escribirse en colab/ (no versionado).")
             source = root / "notebooks/source-template.zip"
             source.parent.mkdir(parents=True, exist_ok=True)
             snapshot(root, source)
-            portable_notebook(source, json.loads((root / args.config).read_text()), target)
+            portable_notebook(source, json.loads((root / args.config).read_text()), target, args.data_url)
             source.unlink()
             print(target)
         elif args.command == "freeze":

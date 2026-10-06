@@ -1,34 +1,32 @@
-"""Validación estructural local. Ejecución real mediante nbclient opcional."""
+"""Valida el notebook de Colab y, opcionalmente, lo ejecuta con los datos oficiales locales."""
 
 import argparse
+import json
+import os
 from pathlib import Path
-
-import nbformat
-from nbclient import NotebookClient
 
 parser = argparse.ArgumentParser()
 parser.add_argument("notebook", type=Path)
-parser.add_argument("--execute-synthetic", action="store_true")
-parser.add_argument("--execute-python-synthetic", action="store_true", help="Ejecutar celdas Python sin sockets de Jupyter; no equivale a probar un kernel Colab")
+parser.add_argument("--execute", action="store_true", help="Ejecutar todas las celdas en este intérprete, sin kernel Jupyter")
+parser.add_argument("--workdir", type=Path, help="Carpeta de trabajo vacía (simula /content de Colab)")
+parser.add_argument("--data-zip", type=Path, help="hackathon_datos.zip local para no descargarlo")
+parser.add_argument("--config-name", help="Sustituir CONFIG_NAME para una prueba más corta")
 args = parser.parse_args()
-notebook = nbformat.read(args.notebook, as_version=4)
-nbformat.validate(notebook)
-for cell in notebook.cells:
-    if cell.cell_type == "code":
-        compile(cell.source, str(args.notebook), "exec")
-if args.execute_synthetic or args.execute_python_synthetic:
-    for cell in notebook.cells:
-        if cell.cell_type == "code" and "INSTALL_DEPENDENCIES = True" in cell.source:
-            cell.source = cell.source.replace("INSTALL_DEPENDENCIES = True", "INSTALL_DEPENDENCIES = False").replace("USE_SYNTHETIC_DATA = False", "USE_SYNTHETIC_DATA = True")
-    if args.execute_python_synthetic:
-        namespace = {"__name__": "__main__"}
-        for i, cell in enumerate(notebook.cells):
-            if cell.cell_type == "code":
-                exec(compile(cell.source, f"{args.notebook}:cell-{i}", "exec"), namespace)
-        print("Celdas Python ejecutadas sin kernel Jupyter, con datos inventados.")
-    else:
-        NotebookClient(notebook, timeout=180, kernel_name="python3").execute()
-        target = args.notebook.with_name(args.notebook.stem + "_executed.ipynb")
-        nbformat.write(notebook, target)
-        print("Notebook ejecutado con datos inventados:", target)
+notebook = json.loads(args.notebook.read_text(encoding="utf-8"))
+assert notebook["nbformat"] == 4
+cells = ["".join(c["source"]) for c in notebook["cells"] if c["cell_type"] == "code"]
+for i, source in enumerate(cells):
+    compile(source, f"{args.notebook}:cell-{i}", "exec")
+if args.execute:
+    if args.config_name:
+        cells = [c.replace("CONFIG_NAME = None", f"CONFIG_NAME = {args.config_name!r}") for c in cells]
+    workdir = (args.workdir or Path.cwd()).resolve()
+    workdir.mkdir(parents=True, exist_ok=True)
+    if args.data_zip:
+        (workdir / "hackathon_datos.zip").write_bytes(args.data_zip.read_bytes())
+    os.chdir(workdir)
+    namespace = {"__name__": "__main__", "display": print}
+    for i, source in enumerate(cells):
+        exec(compile(source, f"{args.notebook}:cell-{i}", "exec"), namespace)
+    print("Celdas ejecutadas en", workdir)
 print("Notebook válido:", args.notebook)

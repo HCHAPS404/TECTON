@@ -6,23 +6,31 @@ import pandas as pd
 from tecton.schema import NUMERIC
 
 CAT = ["DIVIPOLA", "departamento", "mes_cat", "fase_enso"]
+BASE_STATS = ["n", "e", "z", "p"]
+# Columnas de historial que solo existen en entrenamiento; se usan como tasas previas al corte.
+EVENT_TYPES = ["n_movimiento_masa", "n_inundacion", "n_vendaval", "n_creciente_subita", "n_avenida_torrencial", "n_otros"]
 
 
 class Features:
-    def __init__(self, use_history=True, smoothing=20.0):
+    def __init__(self, use_history=True, smoothing=20.0, event_types=False):
         self.use_history = use_history
         self.smoothing = float(smoothing)
+        self.event_types = bool(event_types)
+        self.stats = BASE_STATS + ([f"t_{c}" for c in EVENT_TYPES] + ["t_viviendas"] if self.event_types else [])
         if self.smoothing <= 0:
             raise ValueError("smoothing debe ser positivo.")
 
-    @staticmethod
-    def _work(frame):
+    def _work(self, frame):
         work = frame.reset_index(drop=True).copy()
         work["departamento"] = work["DIVIPOLA"].str[:2]
         work["e"] = work["tiene_evento"].astype(float)
         work["z"] = np.log1p(work["personas_desplazadas"].astype(float))
         work["p"] = (work["personas_desplazadas"] > 0).astype(float)
         work["n"] = 1.0
+        if self.event_types:
+            for col in EVENT_TYPES:
+                work[f"t_{col}"] = (work[col] > 0).astype(float)
+            work["t_viviendas"] = ((work["viv_destruidas"] + work["viv_averiadas"]) > 0).astype(float)
         return work
 
     def _base(self, frame):
@@ -41,25 +49,24 @@ class Features:
         x["fase_enso"] = frame["fase_enso"].fillna("Desconocida").astype(str).to_numpy()
         return x
 
-    @staticmethod
-    def _prior_rows(work, keys):
+    def _prior_rows(self, work, keys):
         """Sumas estrictamente anteriores a cada fila (grupo tiene una fila por fecha)."""
         grouped = work.groupby(keys, sort=False, dropna=False)
-        stats = grouped[["n", "e", "z", "p"]].cumsum() - work[["n", "e", "z", "p"]]
+        stats = grouped[self.stats].cumsum() - work[self.stats]
         return stats.reset_index(drop=True)
 
-    @staticmethod
-    def _prior_months(work, keys):
+    def _prior_months(self, work, keys):
         """Excluir TODO el mes actual para global/departamento, incluyendo otros municipios."""
         grouping = keys + ["fecha"]
-        monthly = work.groupby(grouping, as_index=False)[["n", "e", "z", "p"]].sum()
+        cols = self.stats
+        monthly = work.groupby(grouping, as_index=False)[cols].sum()
         monthly = monthly.sort_values(grouping).reset_index(drop=True)
         if keys:
-            previous = monthly.groupby(keys, sort=False)[["n", "e", "z", "p"]].cumsum()
+            previous = monthly.groupby(keys, sort=False)[cols].cumsum()
         else:
-            previous = monthly[["n", "e", "z", "p"]].cumsum()
-        monthly[["n", "e", "z", "p"]] = previous - monthly[["n", "e", "z", "p"]]
-        return work[grouping].merge(monthly, on=grouping, how="left", validate="many_to_one")[["n", "e", "z", "p"]]
+            previous = monthly[cols].cumsum()
+        monthly[cols] = previous - monthly[cols]
+        return work[grouping].merge(monthly, on=grouping, how="left", validate="many_to_one")[cols]
 
     def _history(self, global_stats, dept, muni, seasonal):
         alpha = self.smoothing
@@ -77,6 +84,11 @@ class Features:
             "history_mean_log_people": (muni.z + alpha * g_mean) / (muni.n + alpha),
             "history_positive_people_rate": (muni.p + alpha * g_pos) / (muni.n + alpha),
         })
+        if self.event_types:
+            # Tasa municipal previa de cada tipo de evento, suavizada hacia la tasa global previa.
+            for col in [c for c in self.stats if c.startswith("t_")]:
+                g_type = (global_stats[col] + alpha * 0.01) / (global_stats.n + alpha)
+                result[f"history_rate_{col[2:]}"] = (muni[col] + alpha * g_type) / (muni.n + alpha)
         # No usar el número de meses como tendencia que no existe en test futuro.
         return result.drop(columns="history_months")
 
@@ -93,11 +105,11 @@ class Features:
             )
             x = pd.concat([x, history], axis=1)
         # Guardar estadísticas hasta el corte para cualquier horizonte de inferencia.
-        self.global_stats = work[["n", "e", "z", "p"]].sum()
+        self.global_stats = work[self.stats].sum()
         self.tables = {
-            "dept": work.groupby("departamento")[["n", "e", "z", "p"]].sum().reset_index(),
-            "muni": work.groupby("DIVIPOLA")[["n", "e", "z", "p"]].sum().reset_index(),
-            "seasonal": work.groupby(["DIVIPOLA", "mes"])[["n", "e", "z", "p"]].sum().reset_index(),
+            "dept": work.groupby("departamento")[self.stats].sum().reset_index(),
+            "muni": work.groupby("DIVIPOLA")[self.stats].sum().reset_index(),
+            "seasonal": work.groupby(["DIVIPOLA", "mes"])[self.stats].sum().reset_index(),
         }
         self.cutoff = work["fecha"].max()
         x["_row"] = work["_row"].to_numpy()
@@ -113,7 +125,7 @@ class Features:
             tables = []
             for label, cols in [("dept", ["departamento"]), ("muni", ["DIVIPOLA"]), ("seasonal", ["DIVIPOLA", "mes"])]:
                 stats = keys[cols].merge(self.tables[label], on=cols, how="left", validate="many_to_one")
-                tables.append(stats[["n", "e", "z", "p"]].fillna(0))
+                tables.append(stats[self.stats].fillna(0))
             global_stats = pd.DataFrame([self.global_stats.to_dict()] * len(frame))
             x = pd.concat([x, self._history(global_stats, *tables)], axis=1)
         return x

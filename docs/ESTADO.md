@@ -30,3 +30,16 @@ React + Kepler.gl implementados y compilados; CSV/JSON, filtros compartidos, ten
 - Auditoría estricta OK: filas, municipios y fechas coinciden con la guía. ZIP trae también diccionario_datos.csv y formato_entrega.csv, sin cambios de contrato.
 - Hallazgos agregados de los datos: solo en docs/hallazgos_datos.local.md (no versionado; el repo es público).
 - Ideas priorizadas: historial causal por tipo de evento, calibración de intervalo, interacción ENSO x estacionalidad municipal.
+
+## Experimentos con datos oficiales (PC, mismos 5 folds + stress, semilla 42), 6 oct 10:35
+
+| run | puntos_75 | AUC | RMSE-log | Winkler | cobertura | decisión |
+|---|---|---|---|---|---|---|
+| baseline-hist | 22.66 | 0.7154 | 1.279 | 3.812 | 0.902 | referencia |
+| baseline-calibrado (punto lineal + intervalo con umbral de probabilidad) | 23.17 | 0.7154 | 1.277 | 3.437 | 0.905 | mejor; config por defecto del notebook |
+| + historial por tipo de evento | 22.45 | 0.7127 | 1.278 | 3.784 | 0.904 | descartado (sin umbral; baja AUC) |
+| catboost-calibrado | — | fold 1: 0.6355 | — | — | — | detenido: 194 s/fold y peor que hist en fold 1 |
+
+- Promoción ahora por puntos_75 (+0.2) con salvaguardas de AUC; protocolo de métricas v3.
+- Notebook: sin modo sintético, sin versiones fijas (usa las de Colab e instala solo lo faltante), descarga directa del ZIP por URL_DATOS. Ejecutado completo en un entorno tipo Colab (Python 3.12, numpy 2.0.2, pandas 2.2.2, scikit-learn 1.6.1): mismas métricas que la PC.
+- Copia del equipo con el enlace: colab/tecton_colab_equipo.ipynb (no versionada).
