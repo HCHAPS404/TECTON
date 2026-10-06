@@ -22,7 +22,7 @@
     "m84s-22dd": "'PRECIPITACIONES 2017-' mismas columnas/filas que s54a-sgyg (vista derivada); sin ventaja",
     "uwim-sqxg": "'Precipitaciones 2017-20' subconjunto sin latitud/longitud; misma granularidad sub-horaria"
   },
-  "fecha_descarga_utc": "2026-10-06T16:53:36+00:00",
+  "fecha_descarga_utc": "2026-10-06T17:18:40+00:00",
   "rango_fechas_usado": {
     "inicio": "2018-01-01T00:00:00",
     "fin": "2022-09-30T23:59:59",
@@ -74,5 +74,5 @@
     }
   },
   "script": "scripts/build_ideam_climatologia.py",
-  "tiempo_ejecucion_s": 2.3
+  "tiempo_ejecucion_s": 1.9
 }

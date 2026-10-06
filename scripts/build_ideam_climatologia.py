@@ -199,7 +199,8 @@ def main():
     qc_stats = {"estacion_mes_total": int(n_raw), "estacion_mes_validos": int(len(sm))}
 
     clim_st = (sm.groupby(["codigoestacion", "mes"])
-                 .agg(mm=("mm_mes", "mean"), n_anios=("anio", "nunique")).reset_index())
+                 .agg(mm=("mm_mes", "mean"), mx=("mx", "mean"), wet=("frac_pos", "mean"),
+                      n_anios=("anio", "nunique")).reset_index())
     clim_st = clim_st[clim_st.n_anios >= QC_MIN_YEARS]
     # exigir los 12 meses por estacion para no sesgar la estacionalidad
     full = clim_st.groupby("codigoestacion").mes.nunique()
@@ -264,26 +265,35 @@ def main():
     st = st[~bad]
     cs = clim_st.merge(st[["codigoestacion", "DIVIPOLA"]], on="codigoestacion")
     mun = (cs.groupby(["DIVIPOLA", "mes"])
-             .agg(precip_media_mm=("mm", "mean"), n_estaciones=("codigoestacion", "nunique"))
+             .agg(precip_media_mm=("mm", "mean"), intensidad_max_mm=("mx", "mean"), frac_lluvia=("wet", "mean"),
+                  n_estaciones=("codigoestacion", "nunique"))
              .reset_index())
     mun["metodo"] = "estacion"
     have = sorted(mun.DIVIPOLA.unique())
 
     # 6. imputacion IDW
-    piv = mun.pivot(index="DIVIPOLA", columns="mes", values="precip_media_mm").loc[have]
+    variables = ["precip_media_mm", "intensidad_max_mm", "frac_lluvia"]
+    pivots = {v: mun.pivot(index="DIVIPOLA", columns="mes", values=v).loc[have] for v in variables}
     src = dvi.loc[have]
     rows = []
     for code in dv.DIVIPOLA:
-        if code in piv.index:
+        if code in pivots["precip_media_mm"].index:
             continue
         d = haversine(dvi.at[code, "lat"], dvi.at[code, "lon"], src.lat.values, src.lon.values)
         idx = np.argsort(d)[:IDW_K]
         w = 1.0 / np.maximum(d[idx], 1.0) ** IDW_P
-        vals = (piv.values[idx] * w[:, None]).sum(0) / w.sum()
+        vals = {v: (pivots[v].values[idx] * w[:, None]).sum(0) / w.sum() for v in variables}
         for mes in range(1, 13):
-            rows.append({"DIVIPOLA": code, "mes": mes, "precip_media_mm": vals[mes - 1],
+            rows.append({"DIVIPOLA": code, "mes": mes, **{v: vals[v][mes - 1] for v in variables},
                          "n_estaciones": 0, "metodo": "vecina"})
-    out = pd.concat([mun, pd.DataFrame(rows)], ignore_index=True)
+    full_out = pd.concat([mun, pd.DataFrame(rows)], ignore_index=True).sort_values(["DIVIPOLA", "mes"]).reset_index(drop=True)
+    # Climatología de intensidad en archivo aparte: no cambia el archivo usado por el champion.
+    inten = full_out[["DIVIPOLA", "mes", "intensidad_max_mm", "frac_lluvia"]].copy()
+    inten["intensidad_max_mm"] = inten.intensidad_max_mm.round(3)
+    inten["frac_lluvia"] = inten.frac_lluvia.round(5)
+    assert inten.notna().all().all() and len(inten) == 12 * len(dv)
+    inten.to_csv(OUT_DIR / "ideam_intensidad.csv", index=False)
+    out = full_out.drop(columns=["intensidad_max_mm", "frac_lluvia"])
     out["precip_media_mm"] = out.precip_media_mm.round(2)
     out = out.sort_values(["DIVIPOLA", "mes"])[
         ["DIVIPOLA", "mes", "precip_media_mm", "n_estaciones", "metodo"]].reset_index(drop=True)

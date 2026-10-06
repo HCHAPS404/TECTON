@@ -24,7 +24,8 @@ class Features:
     }
 
     def __init__(self, use_history=True, smoothing=20.0, event_types=False, extra_history=(), drop=(),
-                 external_tables=None, spatial_k=0):
+                 external_tables=None, spatial_k=0, external_derived=False):
+        self.external_derived = bool(external_derived)
         self.spatial_k = int(spatial_k)
         # Tablas externas ya cargadas por el pipeline: {nombre: DataFrame con DIVIPOLA [y mes]}.
         self.external_tables = external_tables or {}
@@ -75,6 +76,12 @@ class Features:
             joined = left[keys].merge(table[keys + values], on=keys, how="left", validate="many_to_one")
             for col in values:
                 x[f"ext_{name}_{col}"] = joined[col].to_numpy(float)
+                if self.external_derived and "mes" in keys:
+                    # Perfil estacional: total anual del municipio y fracción del año que cae en este mes.
+                    annual = table.groupby("DIVIPOLA")[col].sum()
+                    total = x["DIVIPOLA"].map(annual).to_numpy(float)
+                    x[f"ext_{name}_{col}_anual"] = total
+                    x[f"ext_{name}_{col}_fraccion"] = np.where(total > 0, joined[col].to_numpy(float) / np.maximum(total, 1e-9), 0.0)
         # Excluir covariables por nombre exacto o prefijo (p. ej. "log_ingresos").
         return x.drop(columns=[c for c in x.columns if any(c == d or c.startswith(d + "_") or c == "log_" + d for d in self.drop)])
 

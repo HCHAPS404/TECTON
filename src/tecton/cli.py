@@ -123,8 +123,8 @@ def main():
             print("Registro local agregado. Esto NO envía el formulario oficial.")
         elif args.command == "clock":
             now = datetime.now(ZoneInfo("America/Bogota"))
-            # Fuentes PNUD contradictorias: diapositiva 15:00, notebook base 14:00. Usar la más temprana hasta aclarar.
-            deadline = datetime.fromisoformat("2026-10-06T14:00:00-05:00")
+            # Límite confirmado por el equipo el día del evento (antes: diapositiva 15:00, notebook base 14:00).
+            deadline = datetime.fromisoformat("2026-10-06T14:45:00-05:00")
             announced = datetime.fromisoformat("2026-10-06T15:00:00-05:00")
             path = root / "state/submissions.jsonl"
             submitted = [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
