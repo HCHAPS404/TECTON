@@ -70,3 +70,11 @@ Nueva métrica en runs: stress_far_13_24 (entrena hasta 2020-09, valida 2021-10 
 - Deriva: covariables municipales estables (PSI < 0.1); ONI PSI 1.33. ENSO: entrenamiento 28% Niño/42% Niña; pública 58% Niño; privada 85% Neutral, 0% Niño. La nota oficial dependerá de estacionalidad y perfil municipal más que de ENSO.
 - Champion: 20261006T154005442685Z-baseline-calibrado (run de Colab enviado). Envío registrado con hora aproximada 10:50, pendiente de confirmar.
 - En curso: climatología municipal de lluvia IDEAM 2018-01 a 2022-09 (fuente externa colombiana); integración `features.external_files` lista.
+
+## Nuevo champion, 6 oct 12:10
+
+- 20261006T165706912949Z-lgbm-espacial-ideam: LightGBM (800 it, lr 0.01, 15 hojas, submuestreo) x3 semillas + vecindad espacial k=8 (coordenadas DANE) + climatología IDEAM 2018-01 a 2022-09 + calibración.
+- 5 folds: puntos 24.34, AUC 0.7238, RMSE 1.274, Winkler 3.216. Stress 12 m AUC 0.7418. Stress lejano 13-24 m AUC 0.6955, puntos 21.02 (base 19.90).
+- vs baseline-calibrado (bootstrap por meses): ΔAUC +0.0078 [+0.004, +0.013]; ΔWinkler −0.22; Δpuntos +1.12 [+0.74, +1.65], P=1.00; mejora en 5/5 folds. Promovido por el harness.
+- Ablación rápida (clasificador, objetivo folds+lejano): hist 0.6991; LightGBM 0.7054; +coords 0.7066; +vecindad 0.7070; +IDEAM 0.7081; +vecindad+IDEAM 0.7094. Vecindad k=5 0.7079. Optuna (hist 40 pruebas: 0.7029; LightGBM 11 pruebas: sin mejora sobre 0.7054).
+- Notebook Colab con esta config por defecto, verificado en entorno tipo Colab (instala lightgbm; datos externos embebidos).
