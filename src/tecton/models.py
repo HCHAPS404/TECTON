@@ -25,8 +25,9 @@ class Models:
             )
             self.classifier = CatBoostClassifier(loss_function="Logloss", **common)
             self.point = CatBoostRegressor(loss_function="RMSE", **common)
-            self.low = CatBoostRegressor(loss_function="Quantile:alpha=0.1", **common)
-            self.high = CatBoostRegressor(loss_function="Quantile:alpha=0.9", **common)
+            # Con muchos ceros exactos, la estimación Exact de hojas sesga q10 hacia arriba (cobertura ~5% en ensayo).
+            self.low = CatBoostRegressor(loss_function="Quantile:alpha=0.1", leaf_estimation_method="Gradient", **common)
+            self.high = CatBoostRegressor(loss_function="Quantile:alpha=0.9", leaf_estimation_method="Gradient", **common)
             encoded = x
         elif family == "hist":
             # Excluir ID municipal ordinal: su orden arbitrario no representa proximidad.

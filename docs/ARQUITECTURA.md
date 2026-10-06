@@ -9,6 +9,7 @@ La raíz de este repo es el proyecto. Se trabaja desde aquí, no desde una carpe
 | Datos y modelo | Claude | Auditoría, features, entrenamiento, métricas, CSV de entrega y tabla de replicabilidad |
 | Estética de la información | Cursor | Cómo se ven los datos, las gráficas y el mapa |
 | Pulido de la interfaz | Laura | Jerarquía, espaciado, copy, estados, responsive y accesibilidad sobre lo que Cursor deje |
+| Modelos econométricos | Laura | Motores adicionales bajo el mismo contrato de `models.py` y el mismo protocolo temporal |
 
 Los T&C del PNUD prevalecen sobre este documento. El resumen del reto está en `docs/RETO.md`. El estado de experimentos está en `docs/ESTADO.md`.
 
@@ -117,3 +118,16 @@ No cambia el protocolo de modelos, los folds ni el CSV de entrega.
 3. Laura recorre las tres vistas y cierra el pulido.
 
 El HTML de `dashboard.html` que genera el harness sigue como respaldo sin WebGL. No se reemplaza por la interfaz de React.
+
+## Modelos econométricos de Laura
+
+Un motor nuevo se integra como una `family` más; no como otro pipeline.
+
+1. Crear `src/tecton/econometria.py` con una clase que exponga `fit(x, event, log_people)` y `predict(x)` y devuelva `(prob, point_log, q10_log, q90_log)` en escala log1p, igual que `Models` en `models.py`.
+2. Registrar la familia en `Models.fit` (`family == "econ"` u otro nombre) sin cambiar las familias existentes.
+3. `x` llega de `features.py`: numéricas + categóricas (`DIVIPOLA`, `departamento`, `mes_cat`, `fase_enso`) + historial causal. Si necesita otra transformación, hacerla dentro del motor con estadísticos del entrenamiento del fold; no tocar `features.py`, `pipeline.py`, `schema.py` ni `metrics.py` sin acordarlo con Claude.
+4. Copiar `configs/baseline.json` a `configs/econ.json` y cambiar solo `model`. Mismos folds, semilla y stress.
+5. Probar con `tecton synthetic` + una config smoke, ejecutar tests y ruff. Entrenar con datos reales en Colab (`CONFIG_NAME = 'econ'`). El harness decide la promoción; un ensemble con el champion se evalúa sobre OOF comunes.
+6. Declarar en `docs/ai_usage.csv` si se usó IA para ese código. Sin datos externos fuera de Colombia, anteriores a 2018 o de los meses de prueba.
+
+Nunca versionar `data/`, `ColabBase/`, `runs/`, `delivery/`, `export/` ni el enlace de Drive: el repo es público.

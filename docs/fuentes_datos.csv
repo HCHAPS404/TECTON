@@ -1,0 +1,4 @@
+fuente,entidad,uso,periodo,entra_al_modelo,nota
+entrenamiento.csv / prueba_equipos.csv / prueba_oculta.csv,PNUD (UNGRD; TerriData DNP; Copernicus DEM y MGN DANE; NOAA CPC ONI),Covariables y targets del reto,2018-01 a 2025-12,si,Datos oficiales entregados por la organización; no se comparten fuera del equipo
+Ninguna fuente externa,,No se usan datos externos en el modelo,,no,Restricción del reto: solo fuentes delimitadas a Colombia y desde 2018; sin observaciones de los períodos de prueba
+MGN2024 capa Municipio,DANE,Polígonos del geovisor unidos por DIVIPOLA,2024,no,Solo visualización si se carga; no alimenta entrenamiento ni features

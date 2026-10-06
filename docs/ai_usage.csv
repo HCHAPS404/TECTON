@@ -1,3 +1,3 @@
 herramienta,version,uso,revision_humana
-ChatGPT Codex,COMPLETAR_VERSION_VISIBLE,Scaffold documentación y dashboard local React Kepler.gl,COMPLETAR
-Claude Code,COMPLETAR_VERSION_Y_MODELO,Asistencia de programación y experimentos,COMPLETAR
+Claude Code,COMPLETAR_VERSION (claude --version); modelo Claude Opus 5.5 (claude-opus-5-5),Código del motor: features; modelos; validación temporal; notebook Colab; empaquetado de entrega,COMPLETAR
+ChatGPT Codex,COMPLETAR_VERSION_VISIBLE,Scaffold inicial del repositorio y documentación,COMPLETAR

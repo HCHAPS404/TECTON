@@ -23,8 +23,9 @@ Construir y mejorar un sistema tabular municipio-mes para la Hackathon PNUD del 
 4. Baseline sklearn primero; CatBoost después. Conservar CPU/semilla/folds y cambiar una hipótesis por experimento. Un run fallido no reemplaza el champion.
 5. No editar a mano `runs/`, `delivery/`, `state/champion.json` o predicciones. Usar el harness para escribir artefactos y promover.
 6. El notebook de entrega se genera del snapshot de código usado para entrenar el run elegido.
-7. No añadir datos de emergencias de los períodos de prueba ni reconstruir targets. Rama de clima adicional desactivada hasta aclaración del organizador.
-8. No instalar frameworks de agentes, Spark, Docker, MLflow ni modelos neuronales para esta jornada. Una sesión de Claude administra código; el entrenamiento lo administra Python.
+7. No añadir datos de emergencias de los períodos de prueba ni reconstruir targets. Sin datos externos en el modelo: solo se permitirían fuentes de Colombia desde 2018 y nada observado en meses de prueba (docs/RETO.md).
+8. No instalar frameworks de agentes, Spark, Docker, MLflow ni modelos neuronales para esta jornada. Claude escribe código y prueba con sintéticos en la PC; el entrenamiento real corre en Colab con el notebook generado. Claude revisa solo el resumen agregado (`review_pack`) que el equipo descarga.
+11. Nunca versionar ColabBase/, el enlace de Drive a los datos ni salidas de notebooks: el repo GitHub es público.
 9. Al terminar una unidad de trabajo: reportar cambio, comandos verificados, limitaciones y próximo paso; actualizar `docs/ESTADO.md`. No declarar pruebas no ejecutadas.
 10. Versionar solo código, configs e instrucciones con git local. No crear remotos ni publicar sin instrucción explícita.
 

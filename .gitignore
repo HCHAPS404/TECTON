@@ -26,3 +26,10 @@ dashboard/dist/
 dashboard/public/datos.json
 data/geography/*
 !data/geography/.gitkeep
+export/
+colab/
+ColabBase/
+datos/
+hackathon_datos.zip
+ImagenesRecomendaciones.zip
+*.local.md

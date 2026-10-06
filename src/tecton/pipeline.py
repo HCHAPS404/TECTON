@@ -18,7 +18,7 @@ from tecton.metrics import score
 from tecton.models import Models
 from tecton.schema import KEYS, OUTPUT, load_inputs, sha256, validate_predictions
 
-METRIC_PROTOCOL = {"version": 1, "risk": "AUC-ROC", "magnitude": "RMSE-log1p-all-rows", "interval": "Winkler-log1p-alpha0.2"}
+METRIC_PROTOCOL = {"version": 2, "risk": "AUC-ROC", "magnitude": "RMSE-log1p-all-rows", "interval": "Winkler-log1p-alpha0.2", "points": "notebook-base-PNUD-null-normalized-75"}
 
 
 def dump_json(path, payload):
@@ -104,25 +104,30 @@ def run(root: Path, config_path: Path):
     try:
         with threadpool_limits(limits=config["threads"]):
             for i, (tr_mask, va_mask) in enumerate(split_indices, 1):
+                fold_started = time.perf_counter()
                 training, validation = train.loc[tr_mask].copy(), train.loc[va_mask].copy()
                 predictions, _, _, features = fit_predict(training, validation, config)
                 metrics = score(validation["tiene_evento"], validation["personas_desplazadas"], predictions)
-                folds.append({"fold": i, "validation_rows": len(validation), **metrics})
+                # La duración permite decidir si un motor cabe en el tiempo de Colab; no entra a promoción.
+                folds.append({"fold": i, "validation_rows": len(validation), **metrics, "seconds": round(time.perf_counter() - fold_started, 1)})
                 part = validation[KEYS + ["tiene_evento", "personas_desplazadas"]].copy()
                 part["fold"] = i
                 for name, vector in zip(["prob", "point_log", "q10_log", "q90_log"], predictions, strict=True):
                     part[name] = vector
                 oof.append(part)
                 dump_json(out / "progress.json", {"finished_folds": folds})
-                print(f"{run_id} fold {i}/{len(split_indices)}: AUC={metrics['auc']:.4f} RMSE-log={metrics['rmse_log']:.4f}", flush=True)
-            summary = {f"{metric}_mean": float(np.mean([f[metric] for f in folds])) for metric in ["auc", "rmse_log", "winkler_log", "coverage_80"]}
+                print(f"{run_id} fold {i}/{len(split_indices)}: AUC={metrics['auc']:.4f} RMSE-log={metrics['rmse_log']:.4f} cobertura={metrics['coverage_80']:.3f} {folds[-1]['seconds']}s", flush=True)
+            summary = {f"{metric}_mean": float(np.mean([f[metric] for f in folds])) for metric in ["auc", "rmse_log", "winkler_log", "coverage_80", "puntos_75"]}
             summary["auc_std"] = float(np.std([f["auc"] for f in folds]))
             report = {"summary": summary, "folds": folds}
             if config.get("stress_test", False):
+                stress_started = time.perf_counter()
                 tr = train["fecha"] <= "2021-09-01"
                 va = train["fecha"].between("2021-10-01", "2022-09-01")
                 pred, _, _, _ = fit_predict(train.loc[tr], train.loc[va], config)
                 report["stress_12_months"] = score(train.loc[va, "tiene_evento"], train.loc[va, "personas_desplazadas"], pred)
+                report["stress_12_months"]["seconds"] = round(time.perf_counter() - stress_started, 1)
+                print(f"{run_id} stress 12 meses: AUC={report['stress_12_months']['auc']:.4f} cobertura={report['stress_12_months']['coverage_80']:.3f}", flush=True)
             dump_json(out / "metrics.json", report)
             pd.concat(oof, ignore_index=True).to_csv(out / "oof.csv", index=False, date_format="%Y-%m-%d")
             pred, feature_model, models, features = fit_predict(train, tests, config)
@@ -174,6 +179,8 @@ def promotion_reasons(candidate, candidate_manifest, current=None, current_manif
         reasons.append("RMSE-log empeora más de 3%.")
     if c["winkler_log_mean"] > old["winkler_log_mean"] * 1.10:
         reasons.append("Winkler empeora más de 10%.")
+    if "puntos_75_mean" in c and "puntos_75_mean" in old and c["puntos_75_mean"] < old["puntos_75_mean"]:
+        reasons.append("Baja la nota automática normalizada (puntos_75).")
     if "stress_12_months" in candidate and "stress_12_months" in current:
         if candidate["stress_12_months"]["auc"] < current["stress_12_months"]["auc"] - 0.005:
             reasons.append("La prueba de 12 meses pierde más de 0.005 AUC.")
@@ -206,6 +213,27 @@ def promote(root: Path, run_id: str, reason: str, demo=False):
     with (root / "state" / "promotion_history.jsonl").open("a", encoding="utf-8") as stream:
         stream.write(json.dumps({**payload, "demo": demo}, ensure_ascii=False) + "\n")
     return payload
+
+
+def compare_runs(root: Path, run_ids=None):
+    """Resumen agregado de runs completos; mismo formato en CLI y Colab, sin filas."""
+    root = Path(root)
+    paths = [resolve_run(root, rid) for rid in run_ids] if run_ids else sorted(p.parent for p in (root / "runs").glob("*/metrics.json"))
+    rows = []
+    for path in paths:
+        manifest = json.loads((path / "manifest.json").read_text())
+        if manifest["status"] != "complete":
+            continue
+        metrics = json.loads((path / "metrics.json").read_text())
+        row = {"run_id": path.name, "synthetic": manifest["synthetic"], "protocol_hash": manifest["protocol_hash"], **metrics["summary"]}
+        row["folds"] = len(metrics["folds"])
+        row["last_fold_auc"] = metrics["folds"][-1]["auc"]
+        if "stress_12_months" in metrics:
+            row["stress_auc"] = metrics["stress_12_months"]["auc"]
+            row["stress_coverage_80"] = metrics["stress_12_months"]["coverage_80"]
+        row["elapsed_seconds"] = round(manifest.get("elapsed_seconds", 0), 1)
+        rows.append(row)
+    return rows
 
 
 def resolve_run(root: Path, run_id: str):

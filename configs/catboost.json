@@ -3,7 +3,7 @@
   "data_dir": "data/raw",
   "strict": true,
   "seed": 42,
-  "threads": 4,
+  "threads": 2,
   "model": {"family": "catboost", "iterations": 500, "learning_rate": 0.05, "depth": 6},
   "features": {"use_history": true, "smoothing": 20.0},
   "stress_test": true,

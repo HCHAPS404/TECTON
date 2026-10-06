@@ -8,7 +8,7 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 from zoneinfo import ZoneInfo
 
-from tecton.pipeline import dump_json, promote, resolve_run, run
+from tecton.pipeline import compare_runs, dump_json, promote, resolve_run, run
 from tecton.schema import load_inputs
 
 
@@ -25,6 +25,8 @@ def main():
     execute.add_argument("--config", type=Path, required=True)
     compare = sub.add_parser("compare")
     compare.add_argument("run_ids", nargs="*")
+    importer = sub.add_parser("import-run", help="Importar un run exportado desde Colab con run_pack")
+    importer.add_argument("archive", type=Path)
     promote_parser = sub.add_parser("promote")
     promote_parser.add_argument("run_id")
     promote_parser.add_argument("--reason", required=True)
@@ -69,13 +71,12 @@ def main():
         elif args.command == "run":
             run(root, root / args.config)
         elif args.command == "compare":
-            paths = [resolve_run(root, rid) for rid in args.run_ids] if args.run_ids else sorted((root / "runs").glob("*/metrics.json"))
-            for path in paths:
-                path = path.parent if path.is_file() else path
-                manifest = json.loads((path / "manifest.json").read_text())
-                if manifest["status"] == "complete":
-                    metrics = json.loads((path / "metrics.json").read_text())
-                    print(json.dumps({"run_id": path.name, "synthetic": manifest["synthetic"], "protocol_hash": manifest["protocol_hash"], **metrics["summary"]}, ensure_ascii=False))
+            for row in compare_runs(root, args.run_ids):
+                print(json.dumps(row, ensure_ascii=False))
+        elif args.command == "import-run":
+            from tecton.artifacts import import_run
+
+            print(import_run(root, args.archive))
         elif args.command == "promote":
             print(json.dumps(promote(root, args.run_id, args.reason, args.demo), ensure_ascii=False, indent=2))
         elif args.command == "bundle":
@@ -118,10 +119,12 @@ def main():
             print("Registro local agregado. Esto NO envía el formulario oficial.")
         elif args.command == "clock":
             now = datetime.now(ZoneInfo("America/Bogota"))
+            # Fuentes PNUD contradictorias: diapositiva 15:00, notebook base 14:00. Usar la más temprana hasta aclarar.
             deadline = datetime.fromisoformat("2026-10-06T14:00:00-05:00")
+            announced = datetime.fromisoformat("2026-10-06T15:00:00-05:00")
             path = root / "state/submissions.jsonl"
             submitted = [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
             earliest = max(datetime.fromisoformat(row["received_at"]) for row in submitted) + timedelta(minutes=30) if submitted else now
-            print(json.dumps({"now_bogota": now.isoformat(), "deadline": deadline.isoformat(), "earliest_next_submission": earliest.isoformat(), "minutes_to_deadline": round((deadline - now).total_seconds() / 60, 1)}, indent=2))
+            print(json.dumps({"now_bogota": now.isoformat(), "deadline_seguro": deadline.isoformat(), "cierre_diapositiva": announced.isoformat(), "earliest_next_submission": earliest.isoformat(), "minutes_to_deadline": round((deadline - now).total_seconds() / 60, 1)}, indent=2))
     except (ValueError, FileNotFoundError, HTTPError, URLError) as error:
         parser.exit(2, f"Error: {error}\n")

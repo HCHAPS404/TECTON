@@ -76,6 +76,8 @@ class IntegrityTests(unittest.TestCase):
         self.assertAlmostEqual(metrics["rmse_log"], 0)
         self.assertAlmostEqual(metrics["winkler_log"], 11)
         self.assertEqual(metrics["coverage_80"], 0.5)
+        # Nulo: RMSE sqrt(4.5), Winkler 15 -> 100 * (0.5 + 0.2 + 0.05 * (1 - 11 / 15)).
+        self.assertAlmostEqual(metrics["puntos_75"], 100 * (0.5 + 0.2 + 0.05 * (4 / 15)))
 
     def test_prediction_keys_bounds_and_finite_values(self):
         keys = self.frames[1][KEYS].head(3).copy()

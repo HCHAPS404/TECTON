@@ -3,7 +3,7 @@
   "data_dir": "data/synthetic",
   "strict": false,
   "seed": 42,
-  "threads": 4,
+  "threads": 2,
   "model": {
     "family": "hist",
     "iterations": 30,
