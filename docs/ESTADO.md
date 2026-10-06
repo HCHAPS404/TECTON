@@ -78,3 +78,21 @@ Nueva métrica en runs: stress_far_13_24 (entrena hasta 2020-09, valida 2021-10 
 - vs baseline-calibrado (bootstrap por meses): ΔAUC +0.0078 [+0.004, +0.013]; ΔWinkler −0.22; Δpuntos +1.12 [+0.74, +1.65], P=1.00; mejora en 5/5 folds. Promovido por el harness.
 - Ablación rápida (clasificador, objetivo folds+lejano): hist 0.6991; LightGBM 0.7054; +coords 0.7066; +vecindad 0.7070; +IDEAM 0.7081; +vecindad+IDEAM 0.7094. Vecindad k=5 0.7079. Optuna (hist 40 pruebas: 0.7029; LightGBM 11 pruebas: sin mejora sobre 0.7054).
 - Notebook Colab con esta config por defecto, verificado en entorno tipo Colab (instala lightgbm; datos externos embebidos).
+
+## Ronda de clima y vulnerabilidad, 6 oct 12:00-12:50
+
+Tabla pública: champion lgbm-espacial-ideam = 27.6 (AUC 0.757, RMSE 1.171, Winkler 2.66). Líder 28.4 (AUC 0.764); 2.º y 3.º con AUC 0.761.
+
+| Variante (evaluación rápida sobre champion 0.7094) | Objetivo | Decisión |
+|---|---|---|
+| Perfil estacional de lluvia (total anual + fracción mensual) | 0.7124 | adoptado |
+| + intensidad IDEAM (máx 10 min, fracción de intervalos con lluvia) | 0.7136 | adoptado en x11 |
+| + historial de viviendas/tipos de evento (vulnerabilidad) | 0.7142 | x11 |
+| k=15, suavizado 10, más árboles, sin n_estaciones, combinado de mejoras pequeñas | ≤ 0.7135 | descartados (ruido) |
+| SGC inventario de movimientos en masa | — | no tabular en la API |
+
+Runs completos:
+- 20261006T171507194824Z-lgbm-ideam-perfil: puntos 24.59; stress 12 m AUC 0.7447; lejano 0.7015 / 21.67. vs champion anterior Δpuntos +0.29 [+0.17, +0.44], P=1.00. Promovido y enviado 12:40.
+- 20261006T172320268707Z-lgbm-clima-vulnerabilidad (x11): puntos 24.63; stress 12 m 0.7413; lejano 0.7038 / 21.95. vs perfil: empate (P=0.56).
+- Mezcla OOF 50/50 perfil + x11: 24.70 (AUC 0.7268). Implementado como `ensemble` reproducible en el pipeline; run completo en curso.
+- Límite de entrega confirmado: 14:45.

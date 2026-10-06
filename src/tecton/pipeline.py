@@ -109,7 +109,24 @@ def _fit_predict_raw(train, test, config):
     return predictions, feature_model, model, list(x_train.columns)
 
 
+def _merge(base, override):
+    merged = dict(base)
+    for key, value in override.items():
+        merged[key] = _merge(base[key], value) if isinstance(value, dict) and isinstance(base.get(key), dict) else value
+    return merged
+
+
 def fit_predict(train, test, config):
+    members = config.get("ensemble")
+    if members:
+        # Ensemble de variantes completas (features + modelo + calibración), promediadas en log1p.
+        outputs = [fit_predict(train, test, _merge({k: v for k, v in config.items() if k != "ensemble"}, m)) for m in members]
+        predictions = tuple(np.mean([o[0][i] for o in outputs], axis=0) for i in range(4))
+        model = outputs[0][2]
+        model.members = [o[2] for o in outputs[1:]]
+        model.member_features = [o[1] for o in outputs[1:]]
+        features = list(dict.fromkeys(f for o in outputs for f in o[3]))
+        return predictions, outputs[0][1], model, features
     predictions, feature_model, model, features = _fit_predict_raw(train, test, config)
     months = config.get("calibration", {}).get("months", 0)
     if months:
