@@ -1,0 +1,8 @@
+{
+  "fuente": "DANE DIVIPOLA - Códigos municipios",
+  "dataset_id": "gdxc-w37w",
+  "url": "https://www.datos.gov.co/resource/gdxc-w37w.json?$limit=5000",
+  "fecha_descarga_utc": "2026-10-06T16:52:19.436613+00:00",
+  "municipios": 1122,
+  "uso": "Coordenadas de cabecera para vecindad espacial; referencia geográfica estática, sin dimensión temporal."
+}

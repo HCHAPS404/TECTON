@@ -48,6 +48,14 @@ def feature_registry(features):
             source, proxy, limit = "Copernicus DEM + agregación municipal", "Copernicus DEM GLO-90 global (misma fuente del dataset)", "Para oni_pendiente usar también NOAA ONI; mantener resolución/unidades."
         elif name in ["ONI", "fase_enso"]:
             source, proxy, limit = "NOAA CPC", "Misma serie ONI de NOAA", "Señal compartida nacional; no mide lluvia local."
+        elif name.startswith("ext_ideam"):
+            source, proxy, limit = "IDEAM, estaciones automáticas (datos.gov.co s54a-sgyg), climatología 2018-01 a 2022-09", "CHIRPS o ERA5-Land: precipitación mensual media por unidad administrativa", "71% de municipios imputados desde estaciones vecinas; climatología fija, no lluvia observada del mes."
+        elif name.startswith("ext_divipola_coords"):
+            source, proxy, limit = "DANE DIVIPOLA (datos.gov.co gdxc-w37w), coordenadas de cabecera", "geoBoundaries / GADM: centroide de la unidad administrativa", "Cabecera municipal, no centroide del territorio."
+        elif name.startswith("history_spatial"):
+            source, proxy, limit = "Targets del entrenamiento de los 8 municipios vecinos (DANE coordenadas), con corte temporal", "DesInventar Sendai agregado por vecindad geográfica", "Depende de la densidad de unidades administrativas del país."
+        elif name == "horizonte_meses":
+            source, proxy, limit = "Derivada: meses desde el corte", "Calendario", "Reproducir la misma transformación."
         elif name.startswith("history_"):
             source, proxy, limit = "Targets del entrenamiento desde 2018, con corte temporal", "DesInventar Sendai (registro municipal de desastres), EM-DAT o GDACS", "EM-DAT y GDACS no son municipales-mensuales; DesInventar varía en cobertura por país."
         rows.append({"variable": name, "fuente": source, "proxy_global_o_transferible": proxy, "limite": limit})
@@ -141,7 +149,7 @@ for line in (ROOT / 'requirements-colab.txt').read_text().splitlines():
     if '==' in line and not line.startswith('#'):
         name, version = line.split(';')[0].strip().split('==')
         pins[name.lower()] = version
-needed = {'numpy': 'numpy', 'pandas': 'pandas', 'scikit-learn': 'sklearn', 'joblib': 'joblib', 'threadpoolctl': 'threadpoolctl', 'catboost': 'catboost', 'gdown': 'gdown'}
+needed = {'numpy': 'numpy', 'pandas': 'pandas', 'scikit-learn': 'sklearn', 'joblib': 'joblib', 'threadpoolctl': 'threadpoolctl', 'catboost': 'catboost', 'lightgbm': 'lightgbm', 'gdown': 'gdown'}
 missing = [name for name, module in needed.items() if importlib.util.find_spec(module) is None]
 if missing:
     spec = [f'{n}=={pins[n]}' if n in pins else n for n in missing]
@@ -151,7 +159,7 @@ for module in [m for m in sys.modules if m == 'tecton' or m.startswith('tecton.'
     del sys.modules[module]
 if str(ROOT / 'src') not in sys.path:
     sys.path.insert(0, str(ROOT / 'src'))
-print('Versiones en uso:', {n: metadata.version(n) for n in ['numpy', 'pandas', 'scikit-learn', 'catboost']})
+print('Versiones en uso:', {n: metadata.version(n) for n in ['numpy', 'pandas', 'scikit-learn', 'catboost', 'lightgbm']})
 """)
     add("markdown", "## Datos\nDescarga directa de `hackathon_datos.zip` desde `URL_DATOS`; los CSV se copian sin modificar a `data/raw`. Solo si la descarga falla se pide subir el ZIP. No se imprimen filas.\n")
     add("code", """import re

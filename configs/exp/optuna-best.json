@@ -1,0 +1,59 @@
+{
+  "name": "optuna-best",
+  "data_dir": "data/raw",
+  "strict": true,
+  "seed": 42,
+  "threads": 2,
+  "model": {
+    "family": "hist",
+    "iterations": 78,
+    "learning_rate": 0.0366517128883545,
+    "depth": 8,
+    "max_features": 0.4784771158999896,
+    "min_samples_leaf": 136,
+    "l2": 0.6012934036117732,
+    "max_leaf_nodes": 43
+  },
+  "features": {
+    "use_history": true,
+    "smoothing": 10.0
+  },
+  "stress_test": true,
+  "folds": [
+    {
+      "train_end": "2020-03-01",
+      "valid_start": "2020-04-01",
+      "valid_end": "2020-09-01"
+    },
+    {
+      "train_end": "2020-09-01",
+      "valid_start": "2020-10-01",
+      "valid_end": "2021-03-01"
+    },
+    {
+      "train_end": "2021-03-01",
+      "valid_start": "2021-04-01",
+      "valid_end": "2021-09-01"
+    },
+    {
+      "train_end": "2021-09-01",
+      "valid_start": "2021-10-01",
+      "valid_end": "2022-03-01"
+    },
+    {
+      "train_end": "2022-03-01",
+      "valid_start": "2022-04-01",
+      "valid_end": "2022-09-01"
+    }
+  ],
+  "calibration": {
+    "months": 12
+  },
+  "training": {
+    "seeds": [
+      42,
+      7,
+      123
+    ]
+  }
+}

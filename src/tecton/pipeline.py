@@ -122,6 +122,22 @@ def fit_predict(train, test, config):
     return predictions, feature_model, model, features
 
 
+def with_external(root, config, codes):
+    """Devuelve una copia de config con las tablas externas cargadas y validadas."""
+    files = config["features"].get("external_files", [])
+    tables = {}
+    for relative in files:
+        table = pd.read_csv(Path(root) / relative, dtype={"DIVIPOLA": "string"})
+        keys = [k for k in ["DIVIPOLA", "mes"] if k in table]
+        if not table["DIVIPOLA"].str.fullmatch(r"\d{5}").all() or table.duplicated(keys).any():
+            raise ValueError(f"{relative}: DIVIPOLA inválido o llaves duplicadas.")
+        if set(codes) - set(table["DIVIPOLA"]):
+            raise ValueError(f"{relative}: faltan {len(set(codes) - set(table['DIVIPOLA']))} municipios del reto.")
+        tables[Path(relative).stem] = table
+    features = {k: v for k, v in config["features"].items() if k != "external_files"}
+    return {**config, "features": {**features, "external_tables": tables}}
+
+
 def run(root: Path, config_path: Path):
     root, config_path = Path(root).resolve(), Path(config_path).resolve()
     config = json.loads(config_path.read_text(encoding="utf-8"))
@@ -161,22 +177,10 @@ def run(root: Path, config_path: Path):
     manifest["source_sha256"] = sha256(out / "source.zip")
     dump_json(out / "manifest.json", manifest)
     # Tablas externas declaradas: se cargan una vez, se registran con hash y viajan con el modelo.
-    external_files = config["features"].get("external_files", [])
-    if external_files:
-        tables = {}
-        for relative in external_files:
-            path = root / relative
-            table = pd.read_csv(path, dtype={"DIVIPOLA": "string"})
-            if not table["DIVIPOLA"].str.fullmatch(r"\d{5}").all() or table.duplicated([k for k in ["DIVIPOLA", "mes"] if k in table]).any():
-                raise ValueError(f"{relative}: DIVIPOLA inválido o llaves duplicadas.")
-            missing = set(train["DIVIPOLA"]) - set(table["DIVIPOLA"])
-            if missing:
-                raise ValueError(f"{relative}: faltan {len(missing)} municipios del reto.")
-            tables[Path(relative).stem] = table
-        manifest["external_hashes"] = {relative: sha256(root / relative) for relative in external_files}
+    if config["features"].get("external_files"):
+        manifest["external_hashes"] = {rel: sha256(root / rel) for rel in config["features"]["external_files"]}
         dump_json(out / "manifest.json", manifest)
-        features = {k: v for k, v in config["features"].items() if k != "external_files"}
-        config = {**config, "features": {**features, "external_tables": tables}}
+        config = with_external(root, config, set(train["DIVIPOLA"]))
     folds, oof = [], []
     try:
         with threadpool_limits(limits=config["threads"]):

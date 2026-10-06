@@ -1,4 +1,5 @@
 fuente,entidad,uso,periodo,entra_al_modelo,nota
 entrenamiento.csv / prueba_equipos.csv / prueba_oculta.csv,PNUD (UNGRD; TerriData DNP; Copernicus DEM y MGN DANE; NOAA CPC ONI),Covariables y targets del reto,2018-01 a 2025-12,si,Datos oficiales entregados por la organización; no se comparten fuera del equipo
-Ninguna fuente externa,,No se usan datos externos en el modelo,,no,Restricción del reto: solo fuentes delimitadas a Colombia y desde 2018; sin observaciones de los períodos de prueba
+Precipitación estaciones automáticas (datos.gov.co s54a-sgyg),IDEAM,Climatología municipal de lluvia por mes calendario (precip_media_mm),2018-01 a 2022-09,si (configs con external_files),Solo período de entrenamiento: sin observaciones de los meses de prueba; 71% de municipios imputados por vecinas; script scripts/build_ideam_climatologia.py
+DIVIPOLA - Códigos municipios (datos.gov.co gdxc-w37w),DANE,Coordenadas de cabecera: vecindad espacial y lat/lon,Estático,si (configs con external_files),Referencia geográfica sin dimensión temporal; script scripts/build_divipola_coords.py
 MGN2024 capa Municipio,DANE,Polígonos del geovisor unidos por DIVIPOLA,2024,no,Solo visualización si se carga; no alimenta entrenamiento ni features

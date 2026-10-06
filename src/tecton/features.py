@@ -18,10 +18,14 @@ class Features:
         "dept_season": (["departamento", "mes"], "months", "dept"),
         "season": (["mes"], "months", "global"),
         "dept_enso": (["departamento", "fase_key"], "months", "dept"),
+        # Vecindad espacial (k cabeceras más cercanas); se calcula aparte con coordenadas DANE.
+        "spatial": ([], "spatial", "dept"),
+        "spatial_season": ([], "spatial", "dept"),
     }
 
     def __init__(self, use_history=True, smoothing=20.0, event_types=False, extra_history=(), drop=(),
-                 external_tables=None):
+                 external_tables=None, spatial_k=0):
+        self.spatial_k = int(spatial_k)
         # Tablas externas ya cargadas por el pipeline: {nombre: DataFrame con DIVIPOLA [y mes]}.
         self.external_tables = external_tables or {}
         self.drop = list(drop)
@@ -131,9 +135,12 @@ class Features:
             for name in self.extra_history:
                 keys, mode, _ = self.CONTEXTS[name]
                 extra[name] = self._prior_rows(work, keys) if mode == "rows" else self._prior_months(work, keys)
+            muni_prior, seasonal_prior = self._prior_rows(work, ["DIVIPOLA"]), self._prior_rows(work, ["DIVIPOLA", "mes"])
+            if self.spatial_k:
+                extra.update(self._spatial_fit(work, muni_prior, seasonal_prior))
             history = self._history(
                 self._prior_months(work, []), self._prior_months(work, ["departamento"]),
-                self._prior_rows(work, ["DIVIPOLA"]), self._prior_rows(work, ["DIVIPOLA", "mes"]), extra,
+                muni_prior, seasonal_prior, extra,
             )
             x = pd.concat([x, history], axis=1)
         # Guardar estadísticas hasta el corte para cualquier horizonte de inferencia.
@@ -165,6 +172,66 @@ class Features:
 
             tables = [lookup(label, cols) for label, cols in [("dept", ["departamento"]), ("muni", ["DIVIPOLA"]), ("seasonal", ["DIVIPOLA", "mes"])]]
             extra = {name: lookup(name, self.CONTEXTS[name][0]) for name in self.extra_history}
+            if self.spatial_k:
+                extra.update(self._spatial_transform(keys))
             global_stats = pd.DataFrame([self.global_stats.to_dict()] * len(frame))
             x = pd.concat([x, self._history(global_stats, *tables, extra)], axis=1)
         return x
+
+    def _neighbors(self, munis):
+        coords = self.external_tables.get("divipola_coords")
+        if coords is None:
+            raise ValueError("spatial_k requiere data/external/divipola_coords.csv en external_files.")
+        table = coords.set_index("DIVIPOLA").reindex(munis)
+        if table[["lat", "lon"]].isna().any().any():
+            raise ValueError("Faltan coordenadas para municipios del entrenamiento.")
+        lat, lon = np.radians(table["lat"].to_numpy()), np.radians(table["lon"].to_numpy())
+        # Distancia equirectangular: suficiente para ordenar vecinos dentro de Colombia.
+        dx = (lon[:, None] - lon[None, :]) * np.cos((lat[:, None] + lat[None, :]) / 2)
+        distance = np.hypot(dx, lat[:, None] - lat[None, :])
+        np.fill_diagonal(distance, np.inf)
+        nearest = np.argsort(distance, axis=1)[:, : self.spatial_k]
+        weights = np.zeros((len(munis), len(munis)))
+        np.put_along_axis(weights, nearest, 1.0, axis=1)
+        return weights
+
+    def _spatial_fit(self, work, muni_prior, seasonal_prior):
+        """Sumas previas de los vecinos en cada mes; cada vecino excluye su propio mes actual."""
+        self.spatial_munis = sorted(work["DIVIPOLA"].unique())
+        self.spatial_weights = self._neighbors(self.spatial_munis)
+        col = work["DIVIPOLA"].map({m: i for i, m in enumerate(self.spatial_munis)}).to_numpy()
+        dates = np.sort(work["fecha"].unique())
+        row = np.searchsorted(dates, work["fecha"].to_numpy())
+        result = {}
+        for name, prior in [("spatial", muni_prior), ("spatial_season", seasonal_prior)]:
+            sums = {}
+            for stat in ["n", "e"]:
+                grid = np.zeros((len(dates), len(self.spatial_munis)))
+                grid[row, col] = prior[stat].to_numpy()
+                sums[stat] = (grid @ self.spatial_weights.T)[row, col]
+            result[name] = pd.DataFrame(sums)
+        return result
+
+    def _spatial_transform(self, keys):
+        """Vecinos con las tablas congeladas al corte."""
+        index = {m: i for i, m in enumerate(self.spatial_munis)}
+        col = keys["DIVIPOLA"].map(index)
+        known = col.notna().to_numpy()
+        col = col.fillna(0).astype(int).to_numpy()
+        totals = self.tables["muni"].set_index("DIVIPOLA").reindex(self.spatial_munis).fillna(0)
+        seasonal = self.tables["seasonal"].set_index(["DIVIPOLA", "mes"])
+        result = {}
+        muni_sums = {stat: self.spatial_weights @ totals[stat].to_numpy() for stat in ["n", "e"]}
+        result["spatial"] = pd.DataFrame({stat: np.where(known, muni_sums[stat][col], 0.0) for stat in ["n", "e"]})
+        month = keys["mes"].to_numpy()
+        season = {}
+        for stat in ["n", "e"]:
+            values = np.zeros(len(keys))
+            for m in np.unique(month):
+                vector = seasonal[stat].reindex(pd.MultiIndex.from_product([self.spatial_munis, [m]])).fillna(0).to_numpy()
+                neighbor = self.spatial_weights @ vector
+                mask = month == m
+                values[mask] = np.where(known[mask], neighbor[col[mask]], 0.0)
+            season[stat] = values
+        result["spatial_season"] = pd.DataFrame(season)
+        return result

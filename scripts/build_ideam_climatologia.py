@@ -56,6 +56,9 @@ QC_MAX_FRAC_POS = 0.50      # >50% de intervalos con lluvia -> sensor pegado
 QC_MAX_INTERVAL_MM = 150.0  # max por intervalo implausible
 QC_MAX_MONTH_MM = 2500.0    # mm/mes implausible (tras reescalado)
 QC_MIN_YEARS = 1            # anios validos minimos por estacion-mes calendario
+QC_MIN_ANNUAL_MM = 200.0    # total anual climatologico minimo (sensor muerto / reporta ceros)
+QC_NEIGH_K = 5              # vecinas para la prueba de consistencia espacial
+QC_NEIGH_RATIO = (0.2, 5.0) # total anual / mediana de vecinas fuera de este rango -> se descarta
 IDW_K = 3
 IDW_P = 2.0
 
@@ -102,19 +105,20 @@ def fetch_month(ym):
     return path
 
 
-def fetch_stations_year(y):
-    path = CACHE / f"stations_{y}.json"
+def fetch_station_meta(code):
+    """Metadatos (nombre, depto, municipio, lat, lon) de una estacion: 1 registro dentro de la ventana.
+    (Una agregacion global por anio hace timeout en Socrata; la consulta por estacion es ~4 s.)"""
+    path = CACHE / "stations" / f"{code}.json"
     if path.exists():
         return path
-    end = "2022-09-30T23:59:59" if y == 2022 else f"{y}-12-31T23:59:59"
     rows = soql(PRECIP_ID, {
-        "$select": "codigoestacion, nombreestacion, departamento, municipio, latitud, longitud, count(*) as n",
-        "$where": f"fechaobservacion between '{y}-01-01T00:00:00' and '{end}'",
-        "$group": "codigoestacion, nombreestacion, departamento, municipio, latitud, longitud",
-        "$limit": 50000,
-    })
+        "$select": "codigoestacion, nombreestacion, departamento, municipio, latitud, longitud",
+        "$where": f"codigoestacion='{code}' and fechaobservacion between "
+                  "'2018-01-01T00:00:00' and '2022-09-30T23:59:59'",
+        "$limit": 1,
+    }, timeout=180)
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(rows))
-    print(f"  estaciones {y}: {len(rows)}", flush=True)
     return path
 
 
@@ -162,7 +166,6 @@ def main():
     yms = list(months())
     with ThreadPoolExecutor(WORKERS) as ex:
         list(ex.map(fetch_month, yms))
-        list(ex.map(fetch_stations_year, range(START[0], END[0] + 1)))
 
     div_path = CACHE / "divipola_gdxc-w37w.json"
     if not div_path.exists():
@@ -202,17 +205,15 @@ def main():
     full = clim_st.groupby("codigoestacion").mes.nunique()
     clim_st = clim_st[clim_st.codigoestacion.isin(full[full == 12].index)]
 
-    # metadatos de estaciones (registro con mas observaciones)
-    st = pd.concat([pd.DataFrame(json.loads((CACHE / f"stations_{y}.json").read_text()))
-                    for y in range(START[0], END[0] + 1)], ignore_index=True)
-    st["n"] = pd.to_numeric(st.n, errors="coerce")
+    # metadatos de estaciones (solo las que pasan QC)
+    codes = sorted(clim_st.codigoestacion.unique())
+    print(f"Descargando metadatos de {len(codes)} estaciones ...", flush=True)
+    with ThreadPoolExecutor(WORKERS) as ex:
+        paths = list(ex.map(fetch_station_meta, codes))
+    st = pd.DataFrame([r for p in paths for r in json.loads(p.read_text())])
     st["lat"] = to_float(st.latitud).values
     st["lon"] = to_float(st.longitud).values
-    st = st.dropna(subset=["lat", "lon"])
-    st = (st.groupby(["codigoestacion", "nombreestacion", "departamento", "municipio", "lat", "lon"],
-                     dropna=False).n.sum().reset_index()
-            .sort_values("n", ascending=False).drop_duplicates("codigoestacion"))
-    st = st[st.codigoestacion.isin(clim_st.codigoestacion.unique())].copy()
+    st = st.dropna(subset=["lat", "lon"]).drop_duplicates("codigoestacion").copy()
     # coordenadas plausibles para Colombia
     st = st[st.lat.between(-5, 16.5) & st.lon.between(-82.5, -66)]
 
@@ -246,6 +247,21 @@ def main():
         st.at[i, "DIVIPOLA"] = dv.DIVIPOLA.values[int(np.argmin(dist))]
         st.at[i, "asignacion"] = "cercania(nombre>80km)"
 
+    # QC espacial: total anual de la estacion vs mediana de sus K vecinas mas cercanas
+    ann = clim_st.groupby("codigoestacion").mm.sum()
+    st = st[st.codigoestacion.isin(ann.index)].reset_index(drop=True)
+    st["anual"] = st.codigoestacion.map(ann).values
+    ratios = []
+    for i in range(len(st)):
+        d = haversine(st.lat[i], st.lon[i], st.lat.values, st.lon.values)
+        d[i] = np.inf
+        idx = np.argsort(d)[:QC_NEIGH_K]
+        ratios.append(st.anual[i] / max(np.median(st.anual.values[idx]), 1e-6))
+    st["ratio_vecinas"] = ratios
+    bad = (st.anual < QC_MIN_ANNUAL_MM) | ~st.ratio_vecinas.between(*QC_NEIGH_RATIO)
+    qc_stats["estaciones_12_meses"] = int(len(st))
+    qc_stats["estaciones_descartadas_qc_espacial"] = int(bad.sum())
+    st = st[~bad]
     cs = clim_st.merge(st[["codigoestacion", "DIVIPOLA"]], on="codigoestacion")
     mun = (cs.groupby(["DIVIPOLA", "mes"])
              .agg(precip_media_mm=("mm", "mean"), n_estaciones=("codigoestacion", "nunique"))
@@ -309,7 +325,9 @@ def main():
             f"fraccion de intervalos con lluvia <= {QC_MAX_FRAC_POS} (descarta sensores pegados), "
             f"max por intervalo <= {QC_MAX_INTERVAL_MM} mm, min >= 0; total reescalado por 1/completitud; "
             f"descartado si > {QC_MAX_MONTH_MM} mm/mes. Climatologia estacion = media de anios validos por mes calendario; "
-            "solo estaciones con los 12 meses. Municipio = media simple de sus estaciones."),
+            "solo estaciones con los 12 meses. QC espacial: se descarta la estacion si su total anual < "
+            f"{QC_MIN_ANNUAL_MM} mm o si total/mediana de sus {QC_NEIGH_K} vecinas mas cercanas esta fuera de {QC_NEIGH_RATIO} "
+            "(sensores muertos/pegados). Municipio = media simple de sus estaciones."),
         "asignacion_estacion_municipio": (
             "nombre de municipio normalizado (sin tildes, mayusculas, sin parentesis) + departamento contra DIVIPOLA; "
             "si no casa o la cabecera casada esta a >80 km, municipio de cabecera mas cercana (haversine)."),

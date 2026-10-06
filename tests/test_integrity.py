@@ -57,6 +57,28 @@ class IntegrityTests(unittest.TestCase):
         validation["tiene_evento"] = 1
         pd.testing.assert_frame_equal(before, model.transform(validation))
 
+    def test_spatial_history_has_no_future_or_current_month_leak(self):
+        train = self.frames[0].copy()
+        codes = sorted(train.DIVIPOLA.unique())
+        rng = np.random.default_rng(1)
+        coords = pd.DataFrame({"DIVIPOLA": codes, "lat": rng.uniform(0, 10, len(codes)), "lon": rng.uniform(-78, -70, len(codes))})
+        options = dict(spatial_k=3, extra_history=[], external_tables={"divipola_coords": coords})
+        altered = train.copy()
+        changed_date = pd.Timestamp("2020-01-01")
+        altered.loc[altered.fecha >= changed_date, ["tiene_evento", "personas_desplazadas"]] = [1, 9999]
+        x = Features(**options).fit_transform(train)
+        mask = train.fecha <= changed_date
+        pd.testing.assert_frame_equal(x.loc[mask], Features(**options).fit_transform(altered).loc[mask])
+        self.assertIn("history_spatial_rate", x.columns)
+        model = Features(**options)
+        model.fit_transform(train[train.fecha <= "2021-09-01"])
+        validation = train[train.fecha > "2021-09-01"].copy()
+        before = model.transform(validation)
+        validation["tiene_evento"] = 1
+        pd.testing.assert_frame_equal(before, model.transform(validation))
+        # Congelado: un municipio tiene el mismo valor espacial en todos los meses de prueba.
+        self.assertEqual(before.groupby(validation.DIVIPOLA.to_numpy())["history_spatial_rate"].nunique().max(), 1)
+
     def test_inference_ignores_validation_targets(self):
         train = self.frames[0].copy()
         prefix = train[train.fecha <= "2021-09-01"]

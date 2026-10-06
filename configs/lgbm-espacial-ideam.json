@@ -1,0 +1,65 @@
+{
+  "name": "lgbm-espacial-ideam",
+  "data_dir": "data/raw",
+  "strict": true,
+  "seed": 42,
+  "threads": 2,
+  "model": {
+    "family": "lgbm",
+    "iterations": 800,
+    "learning_rate": 0.01,
+    "depth": -1,
+    "max_leaf_nodes": 15,
+    "min_samples_leaf": 200,
+    "l2": 10.0,
+    "max_features": 0.6,
+    "subsample": 0.7
+  },
+  "features": {
+    "use_history": true,
+    "smoothing": 20.0,
+    "external_files": [
+      "data/external/divipola_coords.csv",
+      "data/external/ideam_climatologia.csv"
+    ],
+    "spatial_k": 8
+  },
+  "stress_test": true,
+  "folds": [
+    {
+      "train_end": "2020-03-01",
+      "valid_start": "2020-04-01",
+      "valid_end": "2020-09-01"
+    },
+    {
+      "train_end": "2020-09-01",
+      "valid_start": "2020-10-01",
+      "valid_end": "2021-03-01"
+    },
+    {
+      "train_end": "2021-03-01",
+      "valid_start": "2021-04-01",
+      "valid_end": "2021-09-01"
+    },
+    {
+      "train_end": "2021-09-01",
+      "valid_start": "2021-10-01",
+      "valid_end": "2022-03-01"
+    },
+    {
+      "train_end": "2022-03-01",
+      "valid_start": "2022-04-01",
+      "valid_end": "2022-09-01"
+    }
+  ],
+  "calibration": {
+    "months": 12
+  },
+  "training": {
+    "seeds": [
+      42,
+      7,
+      123
+    ]
+  }
+}
