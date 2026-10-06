@@ -40,6 +40,23 @@ class IntegrityTests(unittest.TestCase):
         # Incluye TODO el mes cambiado; evita fuga de otros municipios del mismo mes.
         pd.testing.assert_frame_equal(x.loc[train.fecha <= changed_date], x_altered.loc[train.fecha <= changed_date])
 
+    def test_extra_history_has_no_future_or_current_month_leak(self):
+        train = self.frames[0].copy()
+        altered = train.copy()
+        changed_date = pd.Timestamp("2020-01-01")
+        altered.loc[altered.fecha >= changed_date, ["tiene_evento", "personas_desplazadas"]] = [1, 9999]
+        options = dict(extra_history=["enso", "dept_season", "season", "dept_enso"], event_types=True)
+        x = Features(**options).fit_transform(train)
+        x_altered = Features(**options).fit_transform(altered)
+        mask = train.fecha <= changed_date
+        pd.testing.assert_frame_equal(x.loc[mask], x_altered.loc[mask])
+        model = Features(**options)
+        model.fit_transform(train[train.fecha <= "2021-09-01"])
+        validation = train[train.fecha > "2021-09-01"].copy()
+        before = model.transform(validation)
+        validation["tiene_evento"] = 1
+        pd.testing.assert_frame_equal(before, model.transform(validation))
+
     def test_inference_ignores_validation_targets(self):
         train = self.frames[0].copy()
         prefix = train[train.fecha <= "2021-09-01"]

@@ -53,14 +53,60 @@ def fold_indices(train, folds):
     return result
 
 
+def _months_after(cutoff, dates):
+    return ((dates.dt.year - cutoff.year) * 12 + dates.dt.month - cutoff.month).to_numpy(float)
+
+
+def _frozen_training(train, config, options):
+    """Filas de entrenamiento con historial congelado en cortes simulados, como en la prueba real.
+
+    Para cada corte c, las filas de los meses (c, c + horizonte] reciben features calculadas solo
+    con datos <= c. Así el modelo aprende con el mismo historial envejecido que verá en test.
+    """
+    start = train["fecha"].min() + pd.DateOffset(months=options.get("min_history_months", 12))
+    end = train["fecha"].max() - pd.DateOffset(months=1)
+    horizon = options.get("horizon_months", 24)
+    parts = []
+    for cutoff in pd.date_range(start, end, freq=f"{options.get('every_months', 6)}MS"):
+        rows = train[(train["fecha"] > cutoff) & (train["fecha"] <= cutoff + pd.DateOffset(months=horizon))]
+        model = Features(**config["features"])
+        model.fit_transform(train[train["fecha"] <= cutoff])
+        x = model.transform(rows)
+        if options.get("horizon_feature", True):
+            x["horizonte_meses"] = _months_after(cutoff, rows["fecha"])
+        parts.append((x, rows["tiene_evento"].to_numpy(int), np.log1p(rows["personas_desplazadas"].to_numpy(float))))
+    if not parts:
+        raise ValueError("Sin cortes congelados: entrenamiento demasiado corto para la configuración.")
+    return (pd.concat([p[0] for p in parts], ignore_index=True), np.concatenate([p[1] for p in parts]),
+            np.concatenate([p[2] for p in parts]))
+
+
 def _fit_predict_raw(train, test, config):
     feature_model = Features(**config["features"])
     x_train = feature_model.fit_transform(train)
     x_test = feature_model.transform(test)
     y = train["tiene_evento"].to_numpy(int)
     z = np.log1p(train["personas_desplazadas"].to_numpy(float))
-    model = Models(config).fit(x_train, y, z)
-    return model.predict(x_test), feature_model, model, list(x_train.columns)
+    warmup = config.get("training", {}).get("warmup_months", 0)
+    frozen = config.get("training", {}).get("frozen_cutoffs")
+    if frozen:
+        x_fit, y, z = _frozen_training(train, config, frozen)
+        if frozen.get("horizon_feature", True):
+            x_test = x_test.assign(horizonte_meses=_months_after(feature_model.cutoff, test["fecha"].reset_index(drop=True)))
+        x_train = x_fit
+    elif warmup:
+        # Los primeros meses casi no tienen historial previo; sirven para construirlo, no para ajustar.
+        keep = (train["fecha"] >= train["fecha"].min() + pd.DateOffset(months=warmup)).to_numpy()
+        x_fit, y, z = x_train.loc[keep].reset_index(drop=True), y[keep], z[keep]
+    else:
+        x_fit = x_train
+    seeds = config.get("training", {}).get("seeds", [config["seed"]])
+    models = [Models({**config, "seed": seed}).fit(x_fit, y, z) for seed in seeds]
+    outputs = [m.predict(x_test) for m in models]
+    predictions = tuple(np.mean([o[i] for o in outputs], axis=0) for i in range(4))
+    model = models[0]
+    model.members = models[1:]
+    return predictions, feature_model, model, list(x_train.columns)
 
 
 def fit_predict(train, test, config):
@@ -142,6 +188,11 @@ def run(root: Path, config_path: Path):
                 report["stress_12_months"] = score(train.loc[va, "tiene_evento"], train.loc[va, "personas_desplazadas"], pred)
                 report["stress_12_months"]["seconds"] = round(time.perf_counter() - stress_started, 1)
                 print(f"{run_id} stress 12 meses: AUC={report['stress_12_months']['auc']:.4f} cobertura={report['stress_12_months']['coverage_80']:.3f}", flush=True)
+                # Horizonte de 13-24 meses: se parece más a la prueba privada (20-39 meses tras el corte).
+                tr = train["fecha"] <= "2020-09-01"
+                pred, _, _, _ = fit_predict(train.loc[tr], train.loc[va], config)
+                report["stress_far_13_24"] = score(train.loc[va, "tiene_evento"], train.loc[va, "personas_desplazadas"], pred)
+                print(f"{run_id} stress lejano 13-24 meses: AUC={report['stress_far_13_24']['auc']:.4f} puntos={report['stress_far_13_24']['puntos_75']:.2f}", flush=True)
             dump_json(out / "metrics.json", report)
             pd.concat(oof, ignore_index=True).to_csv(out / "oof.csv", index=False, date_format="%Y-%m-%d")
             pred, feature_model, models, features = fit_predict(train, tests, config)
@@ -246,6 +297,10 @@ def compare_runs(root: Path, run_ids=None):
         if "stress_12_months" in metrics:
             row["stress_auc"] = metrics["stress_12_months"]["auc"]
             row["stress_coverage_80"] = metrics["stress_12_months"]["coverage_80"]
+            row["stress_puntos"] = metrics["stress_12_months"]["puntos_75"]
+        if "stress_far_13_24" in metrics:
+            row["far_auc"] = metrics["stress_far_13_24"]["auc"]
+            row["far_puntos"] = metrics["stress_far_13_24"]["puntos_75"]
         row["elapsed_seconds"] = round(manifest.get("elapsed_seconds", 0), 1)
         rows.append(row)
     return rows

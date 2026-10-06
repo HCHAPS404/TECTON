@@ -39,7 +39,9 @@ class Models:
             categorical = [False] * len(self.num_cols) + [True] * len(self.cat_cols)
             common = dict(
                 max_iter=iterations, max_depth=params["depth"], learning_rate=params["learning_rate"],
-                min_samples_leaf=20, l2_regularization=2, random_state=self.config["seed"],
+                min_samples_leaf=params.get("min_samples_leaf", 20), l2_regularization=params.get("l2", 2),
+                max_leaf_nodes=params.get("max_leaf_nodes", 31), max_features=params.get("max_features", 1.0),
+                random_state=self.config["seed"],
                 early_stopping=False, categorical_features=categorical,
             )
             self.classifier = HistGradientBoostingClassifier(**common)

@@ -12,7 +12,20 @@ EVENT_TYPES = ["n_movimiento_masa", "n_inundacion", "n_vendaval", "n_creciente_s
 
 
 class Features:
-    def __init__(self, use_history=True, smoothing=20.0, event_types=False):
+    # Contextos adicionales de historial: clave de agrupación, tipo de exclusión y tasa a la que se suaviza.
+    CONTEXTS = {
+        "enso": (["DIVIPOLA", "fase_key"], "rows", "muni"),
+        "dept_season": (["departamento", "mes"], "months", "dept"),
+        "season": (["mes"], "months", "global"),
+        "dept_enso": (["departamento", "fase_key"], "months", "dept"),
+    }
+
+    def __init__(self, use_history=True, smoothing=20.0, event_types=False, extra_history=(), drop=()):
+        self.drop = list(drop)
+        self.extra_history = list(extra_history)
+        unknown = set(self.extra_history) - set(self.CONTEXTS)
+        if unknown:
+            raise ValueError(f"Historial adicional desconocido: {sorted(unknown)}")
         self.use_history = use_history
         self.smoothing = float(smoothing)
         self.event_types = bool(event_types)
@@ -27,6 +40,7 @@ class Features:
         work["z"] = np.log1p(work["personas_desplazadas"].astype(float))
         work["p"] = (work["personas_desplazadas"] > 0).astype(float)
         work["n"] = 1.0
+        work["fase_key"] = work["fase_enso"].fillna("Desconocida").astype(str)
         if self.event_types:
             for col in EVENT_TYPES:
                 work[f"t_{col}"] = (work[col] > 0).astype(float)
@@ -47,7 +61,8 @@ class Features:
         x["departamento"] = x["DIVIPOLA"].str[:2]
         x["mes_cat"] = month.astype(str)
         x["fase_enso"] = frame["fase_enso"].fillna("Desconocida").astype(str).to_numpy()
-        return x
+        # Excluir covariables por nombre exacto o prefijo (p. ej. "log_ingresos").
+        return x.drop(columns=[c for c in x.columns if any(c == d or c.startswith(d + "_") or c == "log_" + d for d in self.drop)])
 
     def _prior_rows(self, work, keys):
         """Sumas estrictamente anteriores a cada fila (grupo tiene una fila por fecha)."""
@@ -68,7 +83,7 @@ class Features:
         monthly[cols] = previous - monthly[cols]
         return work[grouping].merge(monthly, on=grouping, how="left", validate="many_to_one")[cols]
 
-    def _history(self, global_stats, dept, muni, seasonal):
+    def _history(self, global_stats, dept, muni, seasonal, extra=None):
         alpha = self.smoothing
         # Priors fijos y explícitos solo para el arranque sin historia.
         g_rate = (global_stats.e + alpha * 0.05) / (global_stats.n + alpha)
@@ -84,6 +99,9 @@ class Features:
             "history_mean_log_people": (muni.z + alpha * g_mean) / (muni.n + alpha),
             "history_positive_people_rate": (muni.p + alpha * g_pos) / (muni.n + alpha),
         })
+        for name, stats in (extra or {}).items():
+            base = {"muni": m_rate, "dept": d_rate, "global": g_rate}[self.CONTEXTS[name][2]]
+            result[f"history_{name}_rate"] = (stats.e + alpha * base) / (stats.n + alpha)
         if self.event_types:
             # Tasa municipal previa de cada tipo de evento, suavizada hacia la tasa global previa.
             for col in [c for c in self.stats if c.startswith("t_")]:
@@ -99,9 +117,13 @@ class Features:
         work = work.sort_values(["fecha", "DIVIPOLA"]).reset_index(drop=True)
         x = self._base(work)
         if self.use_history:
+            extra = {}
+            for name in self.extra_history:
+                keys, mode, _ = self.CONTEXTS[name]
+                extra[name] = self._prior_rows(work, keys) if mode == "rows" else self._prior_months(work, keys)
             history = self._history(
                 self._prior_months(work, []), self._prior_months(work, ["departamento"]),
-                self._prior_rows(work, ["DIVIPOLA"]), self._prior_rows(work, ["DIVIPOLA", "mes"]),
+                self._prior_rows(work, ["DIVIPOLA"]), self._prior_rows(work, ["DIVIPOLA", "mes"]), extra,
             )
             x = pd.concat([x, history], axis=1)
         # Guardar estadísticas hasta el corte para cualquier horizonte de inferencia.
@@ -111,6 +133,9 @@ class Features:
             "muni": work.groupby("DIVIPOLA")[self.stats].sum().reset_index(),
             "seasonal": work.groupby(["DIVIPOLA", "mes"])[self.stats].sum().reset_index(),
         }
+        for name in self.extra_history:
+            keys = self.CONTEXTS[name][0]
+            self.tables[name] = work.groupby(keys)[self.stats].sum().reset_index()
         self.cutoff = work["fecha"].max()
         x["_row"] = work["_row"].to_numpy()
         return x.sort_values("_row").drop(columns="_row").reset_index(drop=True)
@@ -122,10 +147,14 @@ class Features:
         if self.use_history:
             keys = frame[["DIVIPOLA", "mes"]].reset_index(drop=True).copy()
             keys["departamento"] = keys["DIVIPOLA"].str[:2]
-            tables = []
-            for label, cols in [("dept", ["departamento"]), ("muni", ["DIVIPOLA"]), ("seasonal", ["DIVIPOLA", "mes"])]:
+            keys["fase_key"] = frame["fase_enso"].fillna("Desconocida").astype(str).to_numpy()
+
+            def lookup(label, cols):
                 stats = keys[cols].merge(self.tables[label], on=cols, how="left", validate="many_to_one")
-                tables.append(stats[self.stats].fillna(0))
+                return stats[self.stats].fillna(0)
+
+            tables = [lookup(label, cols) for label, cols in [("dept", ["departamento"]), ("muni", ["DIVIPOLA"]), ("seasonal", ["DIVIPOLA", "mes"])]]
+            extra = {name: lookup(name, self.CONTEXTS[name][0]) for name in self.extra_history}
             global_stats = pd.DataFrame([self.global_stats.to_dict()] * len(frame))
-            x = pd.concat([x, self._history(global_stats, *tables)], axis=1)
+            x = pd.concat([x, self._history(global_stats, *tables, extra)], axis=1)
         return x

@@ -43,3 +43,21 @@ React + Kepler.gl implementados y compilados; CSV/JSON, filtros compartidos, ten
 - Promoción ahora por puntos_75 (+0.2) con salvaguardas de AUC; protocolo de métricas v3.
 - Notebook: sin modo sintético, sin versiones fijas (usa las de Colab e instala solo lo faltante), descarga directa del ZIP por URL_DATOS. Ejecutado completo en un entorno tipo Colab (Python 3.12, numpy 2.0.2, pandas 2.2.2, scikit-learn 1.6.1): mismas métricas que la PC.
 - Copia del equipo con el enlace: colab/tecton_colab_equipo.ipynb (no versionada).
+
+## Ronda de mejora del AUC, 6 oct 11:00-11:35 (PC, datos oficiales)
+
+Tabla pública tras primer envío (baseline-calibrado): 3.º de 12, 26.2 puntos, AUC 0.748, RMSE 1.177, Winkler 2.90. Solo referencia; se decide por validación.
+
+Diagnóstico: AUC 0.738 a 1-12 meses del corte y 0.687 a 13-24 meses (la prueba privada está a 20-39). Oráculo con tasa municipal real del período futuro: 0.839; el historial disponible ordena municipios con AUC ~0.665. El techo lo pone la información, no el algoritmo. Importancia: mes x departamento, ingresos, ONI x pendiente, elevación.
+
+| Hipótesis | Resultado | Decisión |
+|---|---|---|
+| Bagging 3 semillas, max_features 0.7 | 12m 25.95 pts (AUC 0.740); 13-24m 19.94 | mejor |
+| Regularización (min_samples_leaf 100, l2 5) | 5 folds 23.21 vs 23.17 | combinar |
+| Historial ENSO, estacionalidad departamental, tipos de evento | empate o peor | descartado |
+| Más iteraciones, excluir 2018 | peor | descartado |
+| Entrenamiento con cortes congelados (h24) | 13-24m AUC 0.660 vs 0.687 | descartado |
+| Quitar covariables temporales, suavizado 60, mezcla con logística | igual o peor | descartado |
+| SMOTE / pesos de clase | no aplica: AUC es de ranking | no se aplica |
+
+Nueva métrica en runs: stress_far_13_24 (entrena hasta 2020-09, valida 2021-10 a 2022-09). Siguiente: datos externos colombianos desde 2018 (climatología IDEAM), como experimento separado.
