@@ -10,6 +10,20 @@ Para cada municipio y mes de prueba (2022-10 a 2025-12) el sistema entrega:
 
 > Este repositorio es **público**. Contiene solo código, configuraciones y documentación. Los datos del reto, el enlace de Drive, las predicciones y los runs nunca se versionan.
 
+## Último CSV de predicciones
+
+El CSV final del equipo es **`/home/hell/TECTON_predicciones_experimentales.csv`** (ruta local, fuera del repositorio; no se versiona).
+
+| Dato | Valor |
+|---|---|
+| Filas | 42.978 (prueba pública 2022-10 a 2024-04 + prueba oculta 2024-05 a 2025-12) |
+| Columnas | `DIVIPOLA, fecha, prob_evento, personas_desplazadas_estimadas, personas_desplazadas_q10, personas_desplazadas_q90` |
+| SHA256 | `5f2c2df33d3d797835fb7fdfb49204fba6869f182247bbd4c2d4bc3cbb8db727` |
+| Validación | Aprobada con `tecton.schema.validate_predictions` contra las llaves oficiales el 6 de octubre de 2026 |
+| Modelo | Variante experimental derivada de la familia final (LightGBM x3 semillas + vecindad espacial + IDEAM + Censo DANE + DNP + bloque econométrico + calibración); ver [docs/ESTADO.md](docs/ESTADO.md) |
+
+Este archivo reemplaza a cualquier `predicciones.csv` de `delivery/` o `colab/` como última versión. Para verificar su integridad: `sha256sum /home/hell/TECTON_predicciones_experimentales.csv`.
+
 ---
 
 ## 1. Equipo y frentes

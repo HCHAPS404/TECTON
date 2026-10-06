@@ -131,3 +131,15 @@ Entrega final: 20261006T184216080776Z-final-dnp (LightGBM x3 semillas + vecindad
 Validación: 5 folds puntos 25.17, AUC 0.7311; stress 12 m AUC 0.7468; lejano 13-24 m AUC 0.7028 / 21.84 (primer envío: 19.90).
 Descartados al cierre: historial UNGRD 2014-2015 (evaluación +0.0004 dentro del ruido; run corto peor en fold 2022-04/09: 0.7068 vs 0.7112), Optuna sobre variables finales (sin mejora en 2 pruebas, detenido por tiempo).
 Bundle: delivery/20261006T184216080776Z-final-dnp (CSV, notebook desde snapshot, replicabilidad 97 variables, fuentes, declaración de IA, geovisor). Notebook del equipo con enlace: colab/tecton_colab_equipo_FINAL.ipynb (no versionado).
+
+## Último intento, 6 oct 14:53
+
+- Run `20261006T193544677739Z-cierre-dnp-hist` (final-dnp + historial UNGRD 2014-2017 mensual) quedó sin terminar: sin predicciones ni métricas. No entregable.
+- Mezcla 50/50 final-dnp + final-censo-econ (`scripts/blend_runs.py`, OOF 5 folds): AUC 0.7309 vs 0.7311 de final-dnp solo; puntos 25.13 vs 25.17. No mejora. CSV generado en `colab/mezcla-20261006T195227Z/` pero descartado.
+- Decisión: la entrega vigente sigue siendo `20261006T184216080776Z-final-dnp` (AUC pública 0.764). No hubo tiempo para un run completo nuevo antes de las 14:58.
+
+## Último CSV designado por el equipo
+
+- Archivo: `/home/hell/TECTON_predicciones_experimentales.csv` (fuera del repo, no versionado). SHA256 `5f2c2df3…db727`, 42.978 filas.
+- Validado con `validate_predictions` contra las llaves de `prueba_equipos.csv` + `prueba_oculta.csv`: aprobado. Agregados: prob media 0.089, punto medio 0.49 en log1p, q10 ≤ q90 en todas las filas.
+- Su hash no coincide con ningún `runs/*/predicciones.csv`, ni con los bundles de `delivery/`, ni con las mezclas de `colab/`: proviene de una variante experimental generada fuera del harness local. Se documenta en README como última versión del CSV.
