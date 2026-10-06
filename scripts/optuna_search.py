@@ -15,7 +15,7 @@ from sklearn.metrics import roc_auc_score
 
 from tecton.features import Features
 from tecton.models import Models
-from tecton.pipeline import fold_indices
+from tecton.pipeline import fold_indices, with_external, with_oni
 from tecton.schema import load_inputs
 
 parser = argparse.ArgumentParser()
@@ -24,10 +24,14 @@ parser.add_argument("--trials", type=int, default=40)
 parser.add_argument("--threads", type=int, default=2)
 parser.add_argument("--out", type=Path, default=Path("configs/exp/optuna-best.json"))
 parser.add_argument("--family", default="hist", choices=["hist", "lgbm"])
+parser.add_argument("--fixed-smoothing", action="store_true", help="No buscar suavizado: features calculadas una vez")
 args = parser.parse_args()
 
-base = json.loads(args.base.read_text())
-train = load_inputs(Path("data/raw"), True)[0][0]
+frames = load_inputs(Path("data/raw"), True)[0]
+train = frames[0]
+raw_base = json.loads(args.base.read_text())
+# Mismas tablas externas y bloque econométrico que el pipeline; la config escrita conserva las rutas.
+base = with_oni(with_external(Path.cwd(), raw_base, set(train["DIVIPOLA"])), frames)
 splits = [(train.loc[tr], train.loc[va]) for tr, va in fold_indices(train, base["folds"])]
 splits.append((train[train.fecha <= "2020-09-01"], train[train.fecha.between("2021-10-01", "2022-09-01")]))
 cache = {}
@@ -44,7 +48,7 @@ def features(smoothing):
 
 
 def objective(trial):
-    smoothing = trial.suggest_categorical("smoothing", [5.0, 10.0, 20.0, 40.0])
+    smoothing = base["features"]["smoothing"] if args.fixed_smoothing else trial.suggest_categorical("smoothing", [5.0, 10.0, 20.0, 40.0])
     if args.family == "lgbm":
         model_params = {
             "family": "lgbm", "depth": -1,
@@ -86,7 +90,7 @@ def evaluate(trial, smoothing, config):
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 study = optuna.create_study(direction="maximize", sampler=optuna.samplers.TPESampler(seed=42))
 # Punto de partida: la configuración vigente, para medir la mejora contra ella.
-start = {"smoothing": base["features"]["smoothing"], "iterations": base["model"]["iterations"],
+start = {**({} if args.fixed_smoothing else {"smoothing": base["features"]["smoothing"]}), "iterations": base["model"]["iterations"],
          "learning_rate": base["model"]["learning_rate"], "min_samples_leaf": base["model"].get("min_samples_leaf", 20),
          "l2": base["model"].get("l2", 2.0), "max_leaf_nodes": base["model"].get("max_leaf_nodes", 31),
          "max_features": base["model"].get("max_features", 1.0)}
@@ -105,9 +109,9 @@ def report(study, trial):
 study.optimize(objective, n_trials=args.trials, callbacks=[report])
 best = study.best_trial
 print("Mejor:", json.dumps(best.params), "objetivo", round(best.value, 4), "| referencia (trial 0)", round(study.trials[0].value, 4))
-config = json.loads(json.dumps(base))
+config = json.loads(json.dumps(raw_base))
 config["name"] = "optuna-best"
-config["features"]["smoothing"] = best.params["smoothing"]
+config["features"]["smoothing"] = best.params.get("smoothing", config["features"]["smoothing"])
 config["model"].update({k: v for k, v in best.params.items() if k != "smoothing"})
 args.out.write_text(json.dumps(config, indent=2) + "\n")
 print("Config escrita en", args.out)

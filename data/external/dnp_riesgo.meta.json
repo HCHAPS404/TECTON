@@ -1,0 +1,89 @@
+{
+  "generado": "2026-10-06T18:26:27+00:00",
+  "script": "scripts/build_dnp_riesgo.py",
+  "filas": 1122,
+  "fuentes": {
+    "imrc_2024": {
+      "url": "https://colaboracion.dnp.gov.co/CDT/PublishingImages/La_Entidad/Directivos/Direccciones/ambiente-y-desarrollo-sostenible/Gestion-del-Riesgo-de-Desastres/IMRC-BASE-DE-DATOS-2024.xlsx",
+      "pagina": "https://www.dnp.gov.co/LaEntidad_/subdireccion-general-prospectiva-desarrollo-nacional/direccion-ambiente-desarrollo-sostenible/Paginas/indice-municipal-de-gestion-de-riesgo-ajustado-por-capacidades.aspx",
+      "entidad": "DNP - Dirección de Ambiente y Desarrollo Sostenible",
+      "edicion": 2024,
+      "universo": "DIVIPOLA 2022 (1.122 municipios + áreas no municipalizadas)"
+    },
+    "mdm": {
+      "url": "https://www.datos.gov.co/d/nkjx-rsq7",
+      "entidad": "DNP - Medición del Desempeño Municipal",
+      "anios": [
+        "2018",
+        "2019",
+        "2020"
+      ]
+    },
+    "divipola": {
+      "url": "https://www.datos.gov.co/d/gdxc-w37w"
+    }
+  },
+  "anios_insumos": {
+    "amenaza_exceso": "SGC 2015 movimientos en masa; IDEAM 2010 flujos torrenciales; IDEAM-IGAC 2012 e IDEAM 2016 inundaciones (capas estáticas)",
+    "exposicion": "Grilla de población DANE CNPV 2018",
+    "vulnerabilidad": "IPM municipal censal 2018 (DANE)",
+    "capacidades": "VA per cápita 2016-2019, ingresos tributarios y no tributarios 2016-2019, población cabecera 2016-2019, densidad empresarial 2019, inversión GRD 2016-2019, CMGRD/PMGRD/EMRE 2019-2021",
+    "deficit": "Escenarios de sequía extrema SPI ('varios años', según DNP), susceptibilidad a incendios IDEAM 2009, coberturas 2012, IUA ENA 2019, vulnerabilidad hídrica 2018, MDM gestión 2016-2019",
+    "mdm": "media 2018-2020 (2021 no publicado en nkjx-rsq7)"
+  },
+  "definiciones": {
+    "imrc_e_pct_area_amenazada": "% del área municipal en amenaza alta por movimientos en masa, flujos torrenciales o inundaciones lentas (unión)",
+    "imrc_e_pct_poblacion_expuesta": "% de la población (grilla CNPV 2018) en el área amenazada",
+    "imrc_ipm_vulnerabilidad": "Vulnerabilidad social: % IPM censal 2018",
+    "imrc_e_indice_riesgo": "Índice de riesgo de desastres por exceso de lluvias (amenaza x exposición x vulnerabilidad), escala DNP",
+    "imrc_e_cap_socioeconomica": "Componente socioeconómico de capacidades (0-1)",
+    "imrc_e_cap_financiera": "Componente financiero de capacidades (0-1)",
+    "imrc_e_cap_grd": "Componente de gestión del riesgo de desastres de capacidades (0-1)",
+    "imrc_e_indice_capacidades": "Índice de capacidades (0-1, mayor = más capacidad)",
+    "imrc_e_grupo_capacidad": "Grupo de capacidad codificado: C (ciudades) -> 0, G1..G4 -> 1..4 (mayor número = menores dotaciones/capacidades)",
+    "imrc_e_ajustado": "IMRC exceso de lluvias: índice de riesgo ajustado por capacidades (0-100, mayor = más riesgo)",
+    "imrc_n_herramientas_grd": "0/1/2 herramientas (CMGRD y PMGRD/EMRE)",
+    "imrc_inversion_grd_pc": "Inversión promedio GRD per cápita 2016-2019 (COP constantes 2019)",
+    "imrc_pmgrd_estado": "Plan Municipal de GRD: 2 adoptado, 1 formulado, 0 no formulado",
+    "imrc_emre_estado": "Estrategia Municipal de Respuesta: 2 adoptada, 1 formulada, 0 no formulada",
+    "imrc_grd_no_reportado": "1 si el municipio no reportó a la UNGRD el estado de CMGRD/PMGRD/EMRE (PMGRD/EMRE se imputan; CMGRD solo distingue Creado/No reportado, por eso no se incluye aparte)",
+    "imrc_d_*": "Componentes del IMRC por déficit de lluvias (sequía extrema e incendios forestales)",
+    "mdm_*_2018_2020": "Medición de Desempeño Municipal DNP (puntaje, componente de gestión, componente de resultados), media 2018-2020",
+    "imputado": "1 si el municipio no tenía IMRC exceso (imrc_e_ajustado) y se imputó con la mediana departamental",
+    "imputado_alguna": "1 si alguna columna se imputó (mediana departamental; si el departamento no tiene datos, mediana nacional)"
+  },
+  "cobertura_antes_imputacion": {
+    "imrc_grd_no_reportado": 1121,
+    "imrc_e_pct_area_amenazada": 1121,
+    "imrc_e_pct_poblacion_expuesta": 1121,
+    "imrc_ipm_vulnerabilidad": 1121,
+    "imrc_e_indice_riesgo": 1121,
+    "imrc_e_cap_socioeconomica": 1121,
+    "imrc_e_cap_financiera": 1121,
+    "imrc_n_herramientas_grd": 1121,
+    "imrc_inversion_grd_pc": 1121,
+    "imrc_e_cap_grd": 1121,
+    "imrc_e_indice_capacidades": 1121,
+    "imrc_e_grupo_capacidad": 1121,
+    "imrc_e_ajustado": 1121,
+    "imrc_pmgrd_estado": 802,
+    "imrc_emre_estado": 787,
+    "imrc_d_pct_area_sequia_extrema": 1121,
+    "imrc_d_pct_area_incendio": 1121,
+    "imrc_d_indice_riesgo_sequia": 1121,
+    "imrc_d_indice_riesgo_incendio": 1121,
+    "imrc_d_indice_riesgo": 1121,
+    "imrc_d_mdm_gestion_2016_2019": 1121,
+    "imrc_d_indice_capacidades": 1121,
+    "imrc_d_ajustado": 1121,
+    "mdm_gestion_2018_2020": 1101,
+    "mdm_puntaje_2018_2020": 1101,
+    "mdm_resultados_2018_2020": 1101
+  },
+  "imputacion": "mediana del departamento por columna; respaldo mediana nacional",
+  "notas": [
+    "Se usa la edición 2024 del IMRC porque sus insumos son 2018-2021; la edición original (2018) usa insumos 2005-2016 y no se incluye.",
+    "Variables estáticas (corte transversal); ningún insumo corresponde a observaciones de 2022-10 en adelante según la ficha de fuentes del DNP.",
+    "Los escenarios de sequía del componente de déficit figuran como 'varios años' en la ficha DNP; usar imrc_d_* con esa cautela."
+  ]
+}
