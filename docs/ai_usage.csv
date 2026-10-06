@@ -1,4 +1,4 @@
 herramienta,version,uso,revision_humana
 Claude Code,2.1.281 (Claude Code); modelo Claude Opus 5.5 (claude-opus-5-5),"Código del motor: auditoría del contrato, features con corte temporal (historial, vecindad espacial, perfil estacional), modelos LightGBM/HistGB, calibración de intervalos, validación temporal y comparación estadística; integración de fuentes públicas IDEAM, DANE (Censo 2018, DIVIPOLA) y DNP mediante subagentes; notebook de Colab y empaquetado de la entrega",Equipo TECTON: revisión de cada envío y de las fuentes antes de usarlas
 Cursor,Grok 4.7 (2026-10-06),"Bloque econométrico: valla cloglog con medias de Mundlak, GARCH(1,1) de panel, integración DANE población 2018-2022 y UNGRD 2019-01 a 2022-09 con corte temporal",Equipo TECTON (Laura)
-ChatGPT Codex,versión no registrada,Scaffold inicial del repositorio y documentación base,Equipo TECTON
+ChatGPT Codex,SOL 6.1,Scaffold inicial del repositorio y documentación base,Equipo TECTON
