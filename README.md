@@ -12,7 +12,9 @@ Para cada municipio y mes de prueba (2022-10 a 2025-12) el sistema entrega:
 
 ## Último CSV de predicciones
 
-El CSV final del equipo es **`/home/hell/TECTON_predicciones_experimentales.csv`** (ruta local, fuera del repositorio; no se versiona).
+El CSV final del equipo está versionado en **[`entrega/TECTON_predicciones_experimentales.csv`](entrega/TECTON_predicciones_experimentales.csv)** para que Laura lo integre al despliegue local del geovisor. Es la única excepción a la regla de no versionar predicciones, por decisión del equipo. Copia original: `/home/hell/TECTON_predicciones_experimentales.csv`.
+
+Procedencia: generado con ChatGPT Codex (modo work) sobre una copia completa de este proyecto, fuera del harness local; por eso su hash no coincide con ningún run de `runs/`.
 
 | Dato | Valor |
 |---|---|
@@ -22,7 +24,7 @@ El CSV final del equipo es **`/home/hell/TECTON_predicciones_experimentales.csv`
 | Validación | Aprobada con `tecton.schema.validate_predictions` contra las llaves oficiales el 6 de octubre de 2026 |
 | Modelo | Variante experimental derivada de la familia final (LightGBM x3 semillas + vecindad espacial + IDEAM + Censo DANE + DNP + bloque econométrico + calibración); ver [docs/ESTADO.md](docs/ESTADO.md) |
 
-Este archivo reemplaza a cualquier `predicciones.csv` de `delivery/` o `colab/` como última versión. Para verificar su integridad: `sha256sum /home/hell/TECTON_predicciones_experimentales.csv`.
+Este archivo reemplaza a cualquier `predicciones.csv` de `delivery/` o `colab/` como última versión. Para verificar su integridad: `sha256sum entrega/TECTON_predicciones_experimentales.csv`.
 
 ---
 

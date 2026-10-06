@@ -140,6 +140,7 @@ Bundle: delivery/20261006T184216080776Z-final-dnp (CSV, notebook desde snapshot,
 
 ## Último CSV designado por el equipo
 
-- Archivo: `/home/hell/TECTON_predicciones_experimentales.csv` (fuera del repo, no versionado). SHA256 `5f2c2df3…db727`, 42.978 filas.
+- Archivo: `entrega/TECTON_predicciones_experimentales.csv` (versionado por instrucción del equipo para el despliegue local de Laura; copia original en `/home/hell/`). SHA256 `5f2c2df3…db727`, 42.978 filas. Generado con ChatGPT Codex (modo work) sobre una copia del proyecto.
 - Validado con `validate_predictions` contra las llaves de `prueba_equipos.csv` + `prueba_oculta.csv`: aprobado. Agregados: prob media 0.089, punto medio 0.49 en log1p, q10 ≤ q90 en todas las filas.
 - Su hash no coincide con ningún `runs/*/predicciones.csv`, ni con los bundles de `delivery/`, ni con las mezclas de `colab/`: proviene de una variante experimental generada fuera del harness local. Se documenta en README como última versión del CSV.
+- Commit y push a `origin/colab-v1` el 6 de octubre de 2026 por instrucción explícita del equipo.
