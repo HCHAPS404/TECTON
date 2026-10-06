@@ -5,13 +5,14 @@
     "nbi": "https://www.dane.gov.co/files/censo2018/informacion-tecnica/CNPV-2018-NBI.xlsx",
     "deficit": "https://www.dane.gov.co/files/investigaciones/deficit-habitacional/deficit-hab-2020-anexo-nueva-metodologia.xlsx",
     "personas": "https://www.dane.gov.co/files/censo2018/informacion-tecnica/PERSONAS_DEMOGRAFICO_Cuadros_CNPV_2018.xlsx",
-    "divipola": "https://www.datos.gov.co/resource/gdxc-w37w.json?$limit=5000"
+    "divipola": "https://www.datos.gov.co/resource/gdxc-w37w.json?$limit=5000",
+    "mgn_2024_upra": "https://services.arcgis.com/wLfHepIACaM0pwj9/arcgis/rest/services/MGN_MPIO_POLITICO_2024/FeatureServer/0"
   },
   "dataset_ids": {
     "divipola_datos_gov_co": "gdxc-w37w"
   },
   "fecha_referencia_datos": "2018 (CNPV 2018; déficit habitacional publicado 2020 con datos CNPV 2018)",
-  "fecha_descarga_utc": "2026-10-06T18:11:33.340255+00:00",
+  "fecha_descarga_utc": "2026-10-06T18:14:28.127924+00:00",
   "municipios": 1122,
   "municipios_con_dato_propio_completo": 1121,
   "municipios_imputados": 1,
@@ -45,7 +46,9 @@
     "pct_pob_rural_disperso": 1,
     "pct_pob_0a4": 1,
     "pct_pob_65mas": 1,
-    "personas_por_vivienda": 1
+    "personas_por_vivienda": 1,
+    "area_km2": 1,
+    "densidad_hab_km2": 1
   },
   "imputacion": "Mediana del departamento (2 primeros dígitos DIVIPOLA); si no hay, mediana nacional. imputado=1 si alguna variable fue imputada.",
   "definiciones": {
@@ -62,7 +65,15 @@
     "poblacion_2018": "Cuadro 1PM: población total censada (CNPV 2018, sin ajuste por cobertura).",
     "pct_pob_rural": "Cuadro 1PM: % población en resto (centros poblados + rural disperso) = 1 - cabecera/total.",
     "pct_pob_65mas": "Cuadro 1PM: % población de 65 años y más.",
-    "personas_por_vivienda": "Población censada / viviendas ocupadas con personas presentes (cuadro 5V)."
+    "personas_por_vivienda": "Población censada / viviendas ocupadas con personas presentes (cuadro 5V).",
+    "area_km2": "Área calculada (km²) de los polígonos MGN_MPIO_POLITICO 2024 (DANE) publicados por UPRA, proyectados a South America Albers Equal Area (ESRI:102033), generalización 50 m; diferencia típica <1% frente al área oficial.",
+    "densidad_hab_km2": "poblacion_2018 / area_km2."
   },
-  "uso": "Variables estáticas municipales (sin dimensión temporal); unir por DIVIPOLA."
+  "uso": "Variables estáticas municipales (sin dimensión temporal); unir por DIVIPOLA.",
+  "limitaciones": [
+    "Censo 2018 sin ajuste por cobertura (población censada); hay municipios con baja cobertura censal.",
+    "27493 (Nuevo Belén de Bajirá) no existía en el CNPV 2018: variables censales imputadas con mediana de Chocó; su área sí proviene del MGN 2024.",
+    "area_km2 es geométrica (MGN 2024 vía UPRA, ArcGIS Online) y no el campo oficial MPIO_NAREA; el servicio DANE portalgis.dane.gov.co respondía error durante la descarga.",
+    "Porcentajes de materiales/servicios sobre viviendas ocupadas con personas presentes; NBI sobre personas; déficit sobre hogares."
+  ]
 }

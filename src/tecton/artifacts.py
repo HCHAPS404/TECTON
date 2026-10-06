@@ -48,6 +48,10 @@ def feature_registry(features):
             source, proxy, limit = "Copernicus DEM + agregación municipal", "Copernicus DEM GLO-90 global (misma fuente del dataset)", "Para oni_pendiente usar también NOAA ONI; mantener resolución/unidades."
         elif name.startswith("ext_ideam"):
             source, proxy, limit = "IDEAM, estaciones automáticas (datos.gov.co s54a-sgyg), climatología 2018-01 a 2022-09", "CHIRPS o ERA5-Land: precipitación mensual media por unidad administrativa", "71% de municipios imputados desde estaciones vecinas; climatología fija, no lluvia observada del mes."
+        elif name.startswith("ext_dane_vulnerabilidad"):
+            source, proxy, limit = "DANE CNPV 2018 (viviendas, personas, NBI, déficit habitacional) y área MGN 2024", "WorldPop/GHSL (población), encuestas DHS y censos nacionales (materiales de vivienda, servicios), geoBoundaries (área)", "Censo 2018 fijo; área calculada de polígonos generalizados (<1% de diferencia)."
+        elif name in ["area_proxy_km2", "log_poblacion_proxy"]:
+            source, proxy, limit = "Derivada de coordenadas DANE y densidad TerriData", "geoBoundaries + WorldPop", "Aproximación por separación entre cabeceras."
         elif name.startswith("ext_divipola_coords"):
             source, proxy, limit = "DANE DIVIPOLA (datos.gov.co gdxc-w37w), coordenadas de cabecera", "geoBoundaries / GADM: centroide de la unidad administrativa", "Cabecera municipal, no centroide del territorio."
         elif name.startswith("history_spatial"):

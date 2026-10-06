@@ -341,6 +341,12 @@ def main() -> None:
         "imputacion": "Mediana del departamento (2 primeros dígitos DIVIPOLA); si no hay, mediana nacional. imputado=1 si alguna variable fue imputada.",
         "definiciones": notes,
         "uso": "Variables estáticas municipales (sin dimensión temporal); unir por DIVIPOLA.",
+        "limitaciones": [
+            "Censo 2018 sin ajuste por cobertura (población censada); hay municipios con baja cobertura censal.",
+            "27493 (Nuevo Belén de Bajirá) no existía en el CNPV 2018: variables censales imputadas con mediana de Chocó; su área sí proviene del MGN 2024.",
+            "area_km2 es geométrica (MGN 2024 vía UPRA, ArcGIS Online) y no el campo oficial MPIO_NAREA; el servicio DANE portalgis.dane.gov.co respondía error durante la descarga.",
+            "Porcentajes de materiales/servicios sobre viviendas ocupadas con personas presentes; NBI sobre personas; déficit sobre hogares.",
+        ],
     }
     OUT.with_suffix(".meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
     print(OUT, frame.shape, "imputados:", int(frame["imputado"].sum()))

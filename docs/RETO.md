@@ -2,7 +2,7 @@
 
 Fuente: guía PNUD adjunta a esta conversación, pp. 1–8. Resumen verificado el 6 de octubre de 2026. Los T&C separados y el CSV de formato no estaban disponibles al crear el scaffold; revisar los originales cuando se entreguen.
 
-- Evento: martes 6 de octubre de 2026, Bogotá. Ingreso antes de las 8:00; apertura de datos 10:00. Cierre confirmado por el equipo: 14:45 hora Colombia (la diapositiva decía 15:00 y el notebook base 14:00).
+- Evento: martes 6 de octubre de 2026, Bogotá. Ingreso antes de las 8:00; apertura de datos 10:00. Cierre confirmado por el equipo: 15:00 hora Colombia (coincide con la diapositiva).
 - 1102 municipios por mes. Entrenamiento 2018-01–2022-09, 62814 filas. Prueba equipos 2022-10–2024-04, 20938. Oculta 2024-05–2025-12, 22040.
 - Target riesgo: tiene_evento=1 si hubo evento climático con personas o viviendas afectadas. Puede ser 1 con cero personas.
 - personas_desplazadas agrega personas reportadas como afectadas según el diccionario. No inferir que esta definición demuestra desplazamiento individual observado.
