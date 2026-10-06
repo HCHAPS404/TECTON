@@ -16,6 +16,10 @@ Registrar fecha, hipótesis, archivos, run_id, métricas agregadas, duración, c
 
 React + Kepler.gl implementados y compilados; CSV/JSON, filtros compartidos, tendencias, ranking, validación temporal y trazabilidad. Exportador Python y bundle con geovisor comprobados con un run sintético. Datos oficiales, descarga nacional DANE y prueba visual de WebGL en la PC pendientes. Ver docs/DASHBOARD.md. Conservar esta versión como referencia antes de optimizar.
 
+Geovisor v2 (6 oct): datos oficiales locales del run lgbm-espacial-ideam-econ, 1102/1102 municipios con polígono MGN2018 (scripts/build_geography_mgn2018.py, réplica GitHub porque el geoportal DANE daba 403/500). Mapa centrado en Colombia (antes heredaba el mapState por defecto de Kepler). Validación muestra períodos por fold, cobertura, stress 12 meses y stress lejano 13-24. Fuentes muestra las filas de docs/fuentes_datos.csv que entran al modelo. Build: NODE_OPTIONS=--max-old-space-size=6144 npm run build. Despliegue local: delivery/visor-v3 (run lgbm-ideam-perfil-econ) servido en http://127.0.0.1:8765. Pendiente: revisión visual en navegador.
+
+lgbm-ideam-perfil-econ vs lgbm-ideam-perfil (mismo protocolo): puntos 24.91 vs 24.59; AUC 0.7292 vs 0.7261; Winkler 3.179 vs 3.198; RMSE 1.2739 vs 1.2728; stress 26.53 vs 26.53; lejano 21.91 vs 21.67. Bootstrap pareado por mes (B=1000): Δpuntos +0.25 IC95 [+0.05, +0.47], Δauc +0.0024 IC95 [+0.0006, +0.0044], 4/5 folds mejoran. Candidato a champion; promoción pendiente de decisión del equipo vía harness.
+
 ## Adecuación a Colab y reglas del día, 6 de octubre 09:55
 
 - Notebook generado (`tecton notebook`): selector CONFIG_NAME, carga por URL_DATOS/hackathon_datos.zip como el notebook base, compare/promote en Colab, Drive opcional, descargas separadas: resumen agregado (review_pack), entrega (bundle) y run sin OOF para la PC (run_pack + `tecton import-run`).

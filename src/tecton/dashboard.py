@@ -6,7 +6,7 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlencode
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 import pandas as pd
 
@@ -68,7 +68,9 @@ def download_geography(target: Path):
         raise ValueError("El archivo geográfico ya existe; usar otra ruta para conservar su versión.")
 
     def query(params):
-        with urlopen(DANE_LAYER + "/query?" + urlencode(params), timeout=90) as response:
+        # El geoportal responde 403 «Forbidden Bots» al agente por defecto de urllib.
+        request = Request(DANE_LAYER + "/query?" + urlencode(params), headers={"User-Agent": "Mozilla/5.0 (TECTON geovisor)"})
+        with urlopen(request, timeout=90) as response:
             content = json.load(response)
         if "error" in content:
             raise ValueError(f"DANE devolvió un error: {content['error']}")
@@ -91,6 +93,16 @@ def download_geography(target: Path):
     dump_json(target, geo)
     dump_json(target.with_suffix(".meta.json"), {"source": DANE_LAYER, "version": "MGN2024", "downloaded_at": datetime.now(timezone.utc).isoformat(), "features": len(features), "crs": "EPSG:4326", "max_allowable_offset_degrees": 0.003, "use": "Visualización simplificada; no usar para cálculo de áreas o features del modelo."})
     return target
+
+
+def _model_sources(root):
+    """Fuentes declaradas que entran al modelo, tal como están en docs/fuentes_datos.csv."""
+    path = Path(root) / "docs" / "fuentes_datos.csv"
+    if not path.exists():
+        return []
+    table = pd.read_csv(path, dtype=str).fillna("")
+    used = table[table["entra_al_modelo"].str.lower().str.startswith("si")]
+    return used[["fuente", "entidad", "uso", "periodo"]].to_dict(orient="records")
 
 
 def export_dashboard(root: Path, run_id=None, geojson=None, out=None, demo=False):
@@ -118,7 +130,8 @@ def export_dashboard(root: Path, run_id=None, geojson=None, out=None, demo=False
         geo_path = geo_path if geo_path.is_absolute() else root / geo_path
         geography = normalize_geography(json.loads(geo_path.read_text(encoding="utf-8")))
         meta = geo_path.with_suffix(".meta.json")
-        geo_source = json.loads(meta.read_text()).get("source", geo_path.name) if meta.exists() else geo_path.name
+        info = json.loads(meta.read_text()) if meta.exists() else {}
+        geo_source = info.get("original") or info.get("source") or geo_path.name
     built = root / "dashboard/dist"
     if not (built / "index.html").exists():
         raise ValueError("Falta dashboard/dist. En dashboard ejecutar npm ci && npm run build.")
@@ -129,12 +142,13 @@ def export_dashboard(root: Path, run_id=None, geojson=None, out=None, demo=False
     municipalities = set(pred.DIVIPOLA)
     mapped = {f["properties"]["DIVIPOLA"] for f in geography["features"]} if geography else set()
     payload = {"schema_version": 1, "synthetic": manifest["synthetic"], "metadata": {
-        "source": "predicciones.csv", "run_id": run_id,
+        "source": "predicciones.csv", "run_id": run_id, "model_name": manifest["config"].get("name"),
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "predictions_sha256": sha256(run / "predicciones.csv"),
         "metrics": json.loads((run / "metrics.json").read_text()), "protocol": manifest["protocol"],
         "geography_source": geo_source, "geography_missing_codes": sorted(municipalities - mapped),
         "geography_sha256": sha256(geo_path) if geojson else None,
+        "model_sources": _model_sources(root),
     }, "rows": pred.to_dict(orient="records"), "geography": geography}
     # Construir solo después de validar datos, hashes y geometrías.
     shutil.copytree(built, target)
