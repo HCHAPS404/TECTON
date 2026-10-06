@@ -46,8 +46,6 @@ def feature_registry(features):
             source, proxy, limit = "TerriData / Censo DANE 2018", "Encuestas DHS (índice de riqueza), Global MPI subnacional (OPHI) o Relative Wealth Index (satélite)", "Proxy de privación: no equivale exactamente a NBI; revisar resolución y cobertura."
         elif any(word in name for word in ["elevacion", "pendiente"]):
             source, proxy, limit = "Copernicus DEM + agregación municipal", "Copernicus DEM GLO-90 global (misma fuente del dataset)", "Para oni_pendiente usar también NOAA ONI; mantener resolución/unidades."
-        elif name in ["ONI", "fase_enso"]:
-            source, proxy, limit = "NOAA CPC", "Misma serie ONI de NOAA", "Señal compartida nacional; no mide lluvia local."
         elif name.startswith("ext_ideam"):
             source, proxy, limit = "IDEAM, estaciones automáticas (datos.gov.co s54a-sgyg), climatología 2018-01 a 2022-09", "CHIRPS o ERA5-Land: precipitación mensual media por unidad administrativa", "71% de municipios imputados desde estaciones vecinas; climatología fija, no lluvia observada del mes."
         elif name.startswith("ext_divipola_coords"):
@@ -56,6 +54,18 @@ def feature_registry(features):
             source, proxy, limit = "Targets del entrenamiento de los 8 municipios vecinos (DANE coordenadas), con corte temporal", "DesInventar Sendai agregado por vecindad geográfica", "Depende de la densidad de unidades administrativas del país."
         elif name == "horizonte_meses":
             source, proxy, limit = "Derivada: meses desde el corte", "Calendario", "Reproducir la misma transformación."
+        elif name in ["ONI", "fase_enso"] or name.startswith("oni_"):
+            source, proxy, limit = "NOAA CPC", "Misma serie ONI de NOAA", "Señal compartida nacional; no mide lluvia local. oni_mes cruza el índice con el mes."
+        elif name.startswith("dane_"):
+            source, proxy, limit = "DANE, proyección municipal CNPV 2018 (PPED-AreaMun-2018-2042)", "WorldPop agregado al municipio", "Solo años 2018-2022; desde 2023 se repite la proyección de 2022."
+        elif name.startswith("publico_lag_"):
+            source, proxy, limit = "UNGRD datos abiertos, dataset wwkg-r6te", "DesInventar Sendai o EM-DAT", "Conteos climáticos rezagados, 2019-01 a 2022-09. No usa reportes desde 2022-10."
+        elif name.startswith("oficial_lag_"):
+            source, proxy, limit = "CSV de entrenamiento PNUD, conteos UNGRD por tipo", "DesInventar Sendai municipal", "Rezago estricto dentro del fold. El mes predicho no entra. Congelado en el corte."
+        elif name.startswith("garch_"):
+            source, proxy, limit = "GARCH(1,1) de panel sobre log1p de personas del entrenamiento, con corte temporal", "Mismo filtro sobre DesInventar Sendai municipal", "Alfa y beta se estiman solo con meses del corte. Después del corte es pronóstico a h meses, sin reportes nuevos."
+        elif name.startswith("mundlak_"):
+            source, proxy, limit = "Media municipal del fold de entrenamiento", "Misma media en el país de destino", "Se calcula solo con filas del corte y se aplica congelada."
         elif name.startswith("history_"):
             source, proxy, limit = "Targets del entrenamiento desde 2018, con corte temporal", "DesInventar Sendai (registro municipal de desastres), EM-DAT o GDACS", "EM-DAT y GDACS no son municipales-mensuales; DesInventar varía en cobertura por país."
         rows.append({"variable": name, "fuente": source, "proxy_global_o_transferible": proxy, "limite": limit})

@@ -26,6 +26,7 @@ dashboard/dist/
 dashboard/public/datos.json
 data/geography/*
 !data/geography/.gitkeep
+data/external/PPED-AreaMun-2018-2042_VP.xlsx
 export/
 colab/
 ColabBase/

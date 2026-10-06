@@ -81,7 +81,11 @@ def _frozen_training(train, config, options):
             np.concatenate([p[2] for p in parts]))
 
 
-def _fit_predict_raw(train, test, config):
+def _fit_predict_raw(train, test, config, root=None):
+    if config["model"]["family"] == "econ":
+        from tecton.econometria import fit_predict_econ
+
+        return fit_predict_econ(train, test, config, root)
     feature_model = Features(**config["features"])
     x_train = feature_model.fit_transform(train)
     x_test = feature_model.transform(test)
@@ -116,24 +120,24 @@ def _merge(base, override):
     return merged
 
 
-def fit_predict(train, test, config):
+def fit_predict(train, test, config, root=None):
     members = config.get("ensemble")
     if members:
         # Ensemble de variantes completas (features + modelo + calibración), promediadas en log1p.
-        outputs = [fit_predict(train, test, _merge({k: v for k, v in config.items() if k != "ensemble"}, m)) for m in members]
+        outputs = [fit_predict(train, test, _merge({k: v for k, v in config.items() if k != "ensemble"}, m), root) for m in members]
         predictions = tuple(np.mean([o[0][i] for o in outputs], axis=0) for i in range(4))
         model = outputs[0][2]
         model.members = [o[2] for o in outputs[1:]]
         model.member_features = [o[1] for o in outputs[1:]]
         features = list(dict.fromkeys(f for o in outputs for f in o[3]))
         return predictions, outputs[0][1], model, features
-    predictions, feature_model, model, features = _fit_predict_raw(train, test, config)
+    predictions, feature_model, model, features = _fit_predict_raw(train, test, config, root)
     months = config.get("calibration", {}).get("months", 0)
     if months:
         # Ajustar con los últimos meses del MISMO entrenamiento, usando un modelo que no los vio.
         cutoff = train["fecha"].max() - pd.DateOffset(months=months)
         inner_train, inner_valid = train[train["fecha"] <= cutoff], train[train["fecha"] > cutoff]
-        inner, _, _, _ = _fit_predict_raw(inner_train, inner_valid, config)
+        inner, _, _, _ = _fit_predict_raw(inner_train, inner_valid, config, root)
         model.calibration = calibration.fit(np.log1p(inner_valid["personas_desplazadas"].to_numpy(float)), *inner)
         predictions = calibration.apply(model.calibration, predictions)
     return predictions, feature_model, model, features
@@ -152,7 +156,29 @@ def with_external(root, config, codes):
             raise ValueError(f"{relative}: faltan {len(set(codes) - set(table['DIVIPOLA']))} municipios del reto.")
         tables[Path(relative).stem] = table
     features = {k: v for k, v in config["features"].items() if k != "external_files"}
+    econ = dict(features.get("econ") or {})
+    if econ:
+        from tecton.fuentes_publicas import load_dane, load_ungrd
+
+        for name, loader in [("dane", load_dane), ("ungrd", load_ungrd)]:
+            if econ.get(name):
+                table = loader(root)
+                if table.empty:
+                    raise ValueError(f"features.econ.{name} activo pero falta su CSV en data/external.")
+                econ[name] = table
+            else:
+                econ.pop(name, None)
+        features["econ"] = econ
     return {**config, "features": {**features, "external_tables": tables}}
+
+
+def external_hashes(root, config):
+    from tecton.fuentes_publicas import dane_path, ungrd_path
+
+    files = list(config["features"].get("external_files", []))
+    econ = config["features"].get("econ") or {}
+    files += [str(p(root).relative_to(root)) for name, p in [("dane", dane_path), ("ungrd", ungrd_path)] if econ.get(name)]
+    return {rel: sha256(Path(root) / rel) for rel in files}
 
 
 def run(root: Path, config_path: Path):
@@ -194,8 +220,8 @@ def run(root: Path, config_path: Path):
     manifest["source_sha256"] = sha256(out / "source.zip")
     dump_json(out / "manifest.json", manifest)
     # Tablas externas declaradas: se cargan una vez, se registran con hash y viajan con el modelo.
-    if config["features"].get("external_files"):
-        manifest["external_hashes"] = {rel: sha256(root / rel) for rel in config["features"]["external_files"]}
+    if config["features"].get("external_files") or config["features"].get("econ"):
+        manifest["external_hashes"] = external_hashes(root, config)
         dump_json(out / "manifest.json", manifest)
         config = with_external(root, config, set(train["DIVIPOLA"]))
     folds, oof = [], []
@@ -204,7 +230,7 @@ def run(root: Path, config_path: Path):
             for i, (tr_mask, va_mask) in enumerate(split_indices, 1):
                 fold_started = time.perf_counter()
                 training, validation = train.loc[tr_mask].copy(), train.loc[va_mask].copy()
-                predictions, _, _, features = fit_predict(training, validation, config)
+                predictions, _, _, features = fit_predict(training, validation, config, root)
                 metrics = score(validation["tiene_evento"], validation["personas_desplazadas"], predictions)
                 # La duración permite decidir si un motor cabe en el tiempo de Colab; no entra a promoción.
                 folds.append({"fold": i, "validation_rows": len(validation), **metrics, "seconds": round(time.perf_counter() - fold_started, 1)})
@@ -222,18 +248,18 @@ def run(root: Path, config_path: Path):
                 stress_started = time.perf_counter()
                 tr = train["fecha"] <= "2021-09-01"
                 va = train["fecha"].between("2021-10-01", "2022-09-01")
-                pred, _, _, _ = fit_predict(train.loc[tr], train.loc[va], config)
+                pred, _, _, _ = fit_predict(train.loc[tr], train.loc[va], config, root)
                 report["stress_12_months"] = score(train.loc[va, "tiene_evento"], train.loc[va, "personas_desplazadas"], pred)
                 report["stress_12_months"]["seconds"] = round(time.perf_counter() - stress_started, 1)
                 print(f"{run_id} stress 12 meses: AUC={report['stress_12_months']['auc']:.4f} cobertura={report['stress_12_months']['coverage_80']:.3f}", flush=True)
                 # Horizonte de 13-24 meses: se parece más a la prueba privada (20-39 meses tras el corte).
                 tr = train["fecha"] <= "2020-09-01"
-                pred, _, _, _ = fit_predict(train.loc[tr], train.loc[va], config)
+                pred, _, _, _ = fit_predict(train.loc[tr], train.loc[va], config, root)
                 report["stress_far_13_24"] = score(train.loc[va, "tiene_evento"], train.loc[va, "personas_desplazadas"], pred)
                 print(f"{run_id} stress lejano 13-24 meses: AUC={report['stress_far_13_24']['auc']:.4f} puntos={report['stress_far_13_24']['puntos_75']:.2f}", flush=True)
             dump_json(out / "metrics.json", report)
             pd.concat(oof, ignore_index=True).to_csv(out / "oof.csv", index=False, date_format="%Y-%m-%d")
-            pred, feature_model, models, features = fit_predict(train, tests, config)
+            pred, feature_model, models, features = fit_predict(train, tests, config, root)
             submission = tests[KEYS].copy()
             submission["fecha"] = submission["fecha"].dt.strftime("%Y-%m-%d")
             submission[OUTPUT[2]] = pred[0]
